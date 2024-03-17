@@ -20,31 +20,31 @@ dotnet add package Newtonsoft.Json
 
 ## Example
 ```cs
-    string key = "xxxxxxxxxxx";
-    GroqApiLibrary.GroqApiClient groqApi = new GroqApiLibrary.GroqApiClient(key);
+string key = "xxxxxxxxxxx";
+GroqApiLibrary.GroqApiClient groqApi = new GroqApiLibrary.GroqApiClient(key);
 
-    JObject request = new JObject
+JObject request = new JObject
+{
+    ["model"] = "mixtral-8x7b-32768",
+    ["messages"] = new JArray
     {
-        ["model"] = "mixtral-8x7b-32768",
-        ["messages"] = new JArray
+        new JObject
         {
-            new JObject
-            {
-                ["role"] = "system",
-                ["content"] = "You are a chatbot that holds every answer to every question"
-            },
-            new JObject
-            {
-                ["role"] = "user",
-                ["content"] = "What is the meaning of life?"
-            }
+            ["role"] = "system",
+            ["content"] = "You are a chatbot that holds every answer to every question"
+        },
+        new JObject
+        {
+            ["role"] = "user",
+            ["content"] = "What is the meaning of life?"
         }
-    };
+    }
+};
 
-    JObject result = groqApi.CreateChatCompletionAsync(request).Result;
+JObject result = await groqApi.CreateChatCompletionAsync(request);
 
-    string? response = result?["choices"]?[0]?["message"]?["content"]?.ToString();
-    Console.WriteLine(response);
+string? response = result?["choices"]?[0]?["message"]?["content"]?.ToString();
+Console.WriteLine(response);
 ```
 
 ## Contributing
