@@ -1,11 +1,12 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using GroqApiLibrary;
+using Newtonsoft.Json.Linq;
 
 class Program
 {
     static void Main(string[] args)
     {
         string key = "xxxxxxxxxxx";
-        var groqApi = new GroqApiLibrary.GroqApiClient(key);
+        GroqApiLibrary.GroqApiClient groqApi = new GroqApiLibrary.GroqApiClient(key);
 
         JObject request = new JObject
         {
