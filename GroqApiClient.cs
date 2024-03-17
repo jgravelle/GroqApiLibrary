@@ -12,6 +12,7 @@ namespace GroqApiLibrary
             client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
         }
 
+        //The available request parameters are listed in the Groq API documentation at https://console.groq.com/docs/text-chat
         public async Task<JObject> CreateChatCompletionAsync(JObject request)
         {
             StringContent httpContent = new StringContent(request.ToString(), Encoding.UTF8, "application/json");
