@@ -20,6 +20,9 @@ dotnet add package Newtonsoft.Json
 
 ## Example
 ```cs
+using GroqApiLibrary;
+using Newtonsoft.Json.Linq;
+
 string key = "xxxxxxxxxxx";
 GroqApiLibrary.GroqApiClient groqApi = new GroqApiLibrary.GroqApiClient(key);
 
@@ -45,6 +48,7 @@ JObject result = await groqApi.CreateChatCompletionAsync(request);
 
 string? response = result?["choices"]?[0]?["message"]?["content"]?.ToString();
 Console.WriteLine(response);
+Console.ReadLine();
 ```
 
 ## Contributing
