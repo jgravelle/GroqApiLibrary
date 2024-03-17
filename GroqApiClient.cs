@@ -3,9 +3,9 @@ using Newtonsoft.Json.Linq;
 
 namespace GroqApiLibrary
 {
-    public class GroqApiClient
+    public class GroqApiClient : IGroqApiClient
     {
-        private HttpClient client = new HttpClient(); // Ensure non-null
+        private readonly HttpClient client = new();
 
         public GroqApiClient(string apiKey)
         {

@@ -1,29 +1,39 @@
 ﻿using GroqApiLibrary;
 using Newtonsoft.Json.Linq;
 
-string key = "xxxxxxxxxxx";
-GroqApiLibrary.GroqApiClient groqApi = new GroqApiLibrary.GroqApiClient(key);
-
-JObject request = new JObject
+class Program
 {
-    ["model"] = "mixtral-8x7b-32768",
-    ["messages"] = new JArray
+    static async Task Main()
     {
-        new JObject
+        string apiKey = "xxxxxxxxx";
+        IGroqApiClient groqApi = new GroqApiClient(apiKey);
+
+        JObject request = new()
         {
-            ["role"] = "system",
-            ["content"] = "You are a chatbot that holds every answer to every question"
-        },
-        new JObject
-        {
-            ["role"] = "user",
-            ["content"] = "What is the meaning of life?"
-        }
+            ["model"] = "mixtral-8x7b-32768", // LLaMA2-70b-chat or Gemma-7b-it also supported
+            ["temperature"] = 0.5,
+            ["max_tokens"] = 100,
+            ["top_p"] = 1,
+            ["stop"] = "TERMINATE",
+            ["messages"] = new JArray
+            {
+                new JObject
+                {
+                    ["role"] = "system",
+                    ["content"] = "You are a chatbot capable of anything and everything."
+                },
+                new JObject
+                {
+                    ["role"] = "user",
+                    ["content"] = "Write a poem about GitHub."
+                }
+            }
+        };
+
+        JObject result = await groqApi.CreateChatCompletionAsync(request);
+
+        string response = result["choices"]?[0]?["message"]?["content"]?.ToString() ?? "No response found";
+        Console.WriteLine(response);
+        Console.ReadLine();
     }
-};
-
-JObject result = await groqApi.CreateChatCompletionAsync(request);
-
-string? response = result?["choices"]?[0]?["message"]?["content"]?.ToString();
-Console.WriteLine(response);
-Console.ReadLine();
+}
