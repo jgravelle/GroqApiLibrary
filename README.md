@@ -4,13 +4,14 @@ This library provides a simple interface to interact with the Groq AI API. It al
 
 ## Installation
 
-To use this library, you'll need to install the following NuGet packages:
+1. To use this library, you'll need to install the following NuGet packages:
 
 - Newtonsoft.Json
 
 ```bash
 dotnet add package Newtonsoft.Json
 ```
+2. Copy the `GroqApiClient.cs` file into your project.
 
 ## Usage
 1. Create an instance of the `GroqApiClient` class, providing your API key.
