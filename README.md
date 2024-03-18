@@ -28,23 +28,27 @@ class Program
 {
     static async Task Main(string[] args)
     {
-        string apiKey = "xxxxxxxxxxx";
+        string apiKey = "xxxxxxxxx";
         IGroqApiClient groqApi = new GroqApiClient(apiKey);
 
-        JObject request = new JObject
+        JObject request = new()
         {
-            ["model"] = "mixtral-8x7b-32768",
+            ["model"] = "mixtral-8x7b-32768", // LLaMA2-70b-chat or Gemma-7b-it also supported
+            ["temperature"] = 0.5,
+            ["max_tokens"] = 100,
+            ["top_p"] = 1,
+            ["stop"] = "TERMINATE",
             ["messages"] = new JArray
             {
                 new JObject
                 {
                     ["role"] = "system",
-                    ["content"] = "You are a chatbot that holds every answer to every question"
+                    ["content"] = "You are a chatbot capable of anything and everything."
                 },
                 new JObject
                 {
                     ["role"] = "user",
-                    ["content"] = "What is the meaning of life?"
+                    ["content"] = "Write a poem about GitHub."
                 }
             }
         };
