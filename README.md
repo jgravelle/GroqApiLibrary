@@ -1,4 +1,4 @@
-# Groq API Client Library
+# Groq API C# Client Library
 
 This library provides a simple interface to interact with the Groq AI API. It allows you to send requests to the API and receive responses asynchronously through the `IGroqApiClient` interface.
 
