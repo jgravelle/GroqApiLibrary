@@ -19,6 +19,7 @@ Copy the GroqApiClient.cs file and the IGroqApiClient interface file into your p
 
 
 ## Example
+```
 using GroqApiLibrary;
 using Newtonsoft.Json.Linq;
 using System;
@@ -60,6 +61,7 @@ class Program
         Console.ReadLine();
     }
 }
+```
 
 ## Contributing
 Contributions are welcome! If you find any issues or have suggestions for improvements, please open an issue or submit a pull request.
