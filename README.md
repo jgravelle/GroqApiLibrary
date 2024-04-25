@@ -63,6 +63,13 @@ class Program
 }
 ```
 
+## Latest Update
+Added the response_format parameter to the request, ensuring that the response from Groq Cloud is in JSON format.
+
+This modification should not impact existing client applications that are using this library, as long as they do not explicitly set the response_format parameter in their requests. The library will still work correctly for them, and their client-side code will not need refactoring.
+The modification only adds the response_format parameter if it is not already present in the request. This ensures that existing applications will not be affected, while also allowing JSON Mode requests to function correctly.
+In summary, there should be no impact on existing client applications, and no client-side code refactoring is required.
+
 ## Contributing
 Contributions are welcome! If you find any issues or have suggestions for improvements, please open an issue or submit a pull request.
 
