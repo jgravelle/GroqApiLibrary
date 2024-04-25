@@ -34,7 +34,7 @@ class Program
 
         JObject request = new()
         {
-            ["model"] = "mixtral-8x7b-32768", // LLaMA2-70b-chat or Gemma-7b-it also supported
+            ["model"] = "mixtral-8x7b-32768", // llama2-70b-chat | gemma-7b-it | llama3-70b-8192| llama3-8b-8192 also supported
             ["temperature"] = 0.5,
             ["max_tokens"] = 100,
             ["top_p"] = 1,
