@@ -15,6 +15,8 @@ namespace GroqApiLibrary
         //The available request parameters are listed in the Groq API documentation at https://console.groq.com/docs/text-chat
         public async Task<JObject> CreateChatCompletionAsync(JObject request)
         {
+            request.Add("response_format", new JObject(new JProperty("type", "json_object")));
+
             StringContent httpContent = new StringContent(request.ToString(), Encoding.UTF8, "application/json");
 
             HttpResponseMessage response = await client.PostAsync("https://api.groq.com/openai/v1/chat/completions", httpContent);
