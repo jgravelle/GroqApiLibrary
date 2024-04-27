@@ -15,15 +15,15 @@ public class GroqApiClient : IGroqApiClient
 
     public async Task<JObject> CreateChatCompletionAsync(JObject request)
     {
-        request.Add("response_format", new JObject(new JProperty("type", "json_object")));
-        StringContent httpContent = new StringContent(request.ToString(), Encoding.UTF8, "application/json");
+        // Commented out until stabilized on Groq
+        // the API is still not accepting the request payload in its documented format, even after following the JSON mode instructions.
+        // request.Add("response_format", new JObject(new JProperty("type", "json_object")));
 
+        StringContent httpContent = new StringContent(request.ToString(), Encoding.UTF8, MediaTypeHeaderValue.Parse("application/json"));
         HttpResponseMessage response = await client.PostAsync("https://api.groq.com/openai/v1/chat/completions", httpContent);
         response.EnsureSuccessStatusCode();
-
         string responseString = await response.Content.ReadAsStringAsync();
         JObject responseJson = JObject.Parse(responseString);
-
         return responseJson;
     }
 
