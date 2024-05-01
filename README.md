@@ -4,12 +4,7 @@ This library provides a simple interface to interact with the Groq AI API. It al
 
 ## Installation
 
-1. To use this library, you'll need to install the following NuGet packages:
-   - System.Text.Json
-     ```
-     dotnet add package System.Text.Json
-     ```
-2. Copy the `GroqApiClient.cs` file and the `IGroqApiClient` interface file into your project.
+To use this library, you'll need to copy the `GroqApiClient.cs` file and the `IGroqApiClient` interface file into your project.
 
 ## Usage
 
@@ -120,7 +115,6 @@ class Program_streaming
 - The `JsonObject` and `JsonArray` types from `System.Text.Json.Nodes` are used instead of `JObject` and `JArray` from `Newtonsoft.Json.Linq`.
 - The `CreateChatCompletionAsync` and `CreateChatCompletionStreamAsync` methods now return nullable `JsonObject` and `IAsyncEnumerable<JsonObject?>` respectively.
 - The code has been updated to handle nullable types and use null-conditional operators to avoid potential null reference exceptions.
-- The README has been updated to reflect the changes in the code and provide instructions for using the native `System.Text.Json` library.
 
 The modifications to switch from `Newtonsoft.Json` to `System.Text.Json` should not impact existing client applications that are using this library. The API and usage of the library remain the same, and the only change is the underlying JSON library used. Existing client applications should continue to work without any modifications.
 
