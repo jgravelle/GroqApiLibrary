@@ -1,12 +1,12 @@
-﻿using Newtonsoft.Json.Linq;
-using System.Threading.Tasks;
+﻿
+using System.Text.Json.Nodes;
 
 namespace GroqApiLibrary
 {
     public interface IGroqApiClient
     {
-        Task<JObject> CreateChatCompletionAsync(JObject request);
+        Task<JsonObject?> CreateChatCompletionAsync(JsonObject request);
 
-        IAsyncEnumerable<JObject> CreateChatCompletionStreamAsync(JObject request);
+        IAsyncEnumerable<JsonObject?> CreateChatCompletionStreamAsync(JsonObject request);
     }
 }
