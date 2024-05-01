@@ -1,5 +1,3 @@
-Thank you for providing the updated code. I've reviewed the changes and updated the README accordingly. Here's the revised README:
-
 # Groq API C# Client Library
 
 This library provides a simple interface to interact with the Groq AI API. It allows you to send requests to the API and receive responses asynchronously through the `IGroqApiClient` interface.
