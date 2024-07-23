@@ -1,17 +1,19 @@
 # Groq API C# Client Library
 
-This library provides a simple interface to interact with the Groq AI API. It allows you to send requests to the API and receive responses asynchronously through the `IGroqApiClient` interface.
+This library provides a simple interface to interact with the Groq AI API. It allows you to send requests to the API and receive responses asynchronously using .NET 8.
 
 ## Installation
 
-To use this library, you'll need to copy the `GroqApiClient.cs` file and the `IGroqApiClient` interface file into your project.
+To use this library in your .NET 8 project:
+
+1. Copy the `GroqApiClient.cs` file into your project.
+2. Ensure your project targets .NET 8 or later.
 
 ## Usage
 
-1. Implement the `IGroqApiClient` interface in your application. An example implementation, `GroqApiClient`, is provided.
-2. Create an instance of the `GroqApiClient` class (or any class that implements `IGroqApiClient`), providing your API key.
-3. Create a `JsonObject` with your request. The available parameters are listed in the Groq API documentation.
-4. Receive the response, which is also a `JsonObject`, and extract the response information accordingly.
+1. Create an instance of the `GroqApiClient` class, providing your API key.
+2. Create a `JsonObject` with your request parameters as documented in the Groq API documentation.
+3. Use the client to send requests and receive responses.
 
 ## Examples
 
@@ -19,20 +21,18 @@ To use this library, you'll need to copy the `GroqApiClient.cs` file and the `IG
 
 ```csharp
 using GroqApiLibrary;
-using System;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
 
 class Program
 {
     static async Task Main(string[] args)
     {
-        string apiKey = "xxxxxxxxx";
-        IGroqApiClient groqApi = new GroqApiClient(apiKey);
+        string apiKey = "your_api_key_here";
+        var groqApi = new GroqApiClient(apiKey);
 
-        JsonObject request = new()
+        var request = new JsonObject
         {
-            ["model"] = "mixtral-8x7b-32768", // llama2-70b-chat | gemma-7b-it | llama3-70b-8192| llama3-8b-8192 also supported
+            ["model"] = "mixtral-8x7b-32768", // Other models: llama2-70b-chat, gemma-7b-it, llama3-70b-8192, llama3-8b-8192
             ["temperature"] = 0.5,
             ["max_tokens"] = 100,
             ["top_p"] = 1,
@@ -42,20 +42,19 @@ class Program
                 new JsonObject
                 {
                     ["role"] = "system",
-                    ["content"] = "You are a chatbot capable of anything and everything."
+                    ["content"] = "You are a helpful assistant."
                 },
                 new JsonObject
                 {
                     ["role"] = "user",
-                    ["content"] = "Write a poem about GitHub."
+                    ["content"] = "Write a haiku about coding."
                 }
             }
         };
 
-        JsonObject? result = await groqApi.CreateChatCompletionAsync(request);
-        string response = result?["choices"]?[0]?["message"]?["content"]?.ToString() ?? "No response found";
+        var result = await groqApi.CreateChatCompletionAsync(request);
+        var response = result?["choices"]?[0]?["message"]?["content"]?.ToString() ?? "No response found";
         Console.WriteLine(response);
-        Console.ReadLine();
     }
 }
 ```
@@ -64,20 +63,18 @@ class Program
 
 ```csharp
 using GroqApiLibrary;
-using System;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
 
-class Program_streaming
+class Program
 {
     static async Task Main()
     {
-        string apiKey = "xxxxxxxxx";
-        IGroqApiClient groqApi = new GroqApiClient(apiKey);
+        string apiKey = "your_api_key_here";
+        var groqApi = new GroqApiClient(apiKey);
 
-        JsonObject request = new()
+        var request = new JsonObject
         {
-            ["model"] = "mixtral-8x7b-32768", // LLaMA2-70b-chat or Gemma-7b-it also supported
+            ["model"] = "mixtral-8x7b-32768",
             ["temperature"] = 0.5,
             ["max_tokens"] = 100,
             ["top_p"] = 1,
@@ -87,36 +84,40 @@ class Program_streaming
                 new JsonObject
                 {
                     ["role"] = "system",
-                    ["content"] = "You are a chatbot capable of anything and everything."
+                    ["content"] = "You are a helpful assistant."
                 },
                 new JsonObject
                 {
                     ["role"] = "user",
-                    ["content"] = "Write a poem about GitHub."
+                    ["content"] = "Explain quantum computing in simple terms."
                 }
             }
         };
 
-        await foreach (JsonObject? chunk in groqApi.CreateChatCompletionStreamAsync(request))
+        await foreach (var chunk in groqApi.CreateChatCompletionStreamAsync(request))
         {
-            string delta = chunk?["choices"]?[0]?["delta"]?["content"]?.ToString() ?? string.Empty;
+            var delta = chunk?["choices"]?[0]?["delta"]?["content"]?.ToString() ?? string.Empty;
             Console.Write(delta);
         }
-
-        Console.WriteLine();
-        Console.ReadLine();
     }
 }
 ```
 
+## Features
+
+- Built for .NET 8, taking advantage of the latest C# features.
+- Uses `System.Text.Json` for efficient JSON handling.
+- Supports both synchronous and streaming API calls.
+- Implements `IDisposable` for proper resource management.
+- Nullable aware, helping to prevent null reference exceptions.
+
 ## Latest Updates
 
-- The library now uses the native `System.Text.Json` instead of `Newtonsoft.Json` for JSON serialization and deserialization.
-- The `JsonObject` and `JsonArray` types from `System.Text.Json.Nodes` are used instead of `JObject` and `JArray` from `Newtonsoft.Json.Linq`.
-- The `CreateChatCompletionAsync` and `CreateChatCompletionStreamAsync` methods now return nullable `JsonObject` and `IAsyncEnumerable<JsonObject?>` respectively.
-- The code has been updated to handle nullable types and use null-conditional operators to avoid potential null reference exceptions.
-
-The modifications to switch from `Newtonsoft.Json` to `System.Text.Json` should not impact existing client applications that are using this library. The API and usage of the library remain the same, and the only change is the underlying JSON library used. Existing client applications should continue to work without any modifications.
+- Upgraded to .NET 8 compatibility.
+- Removed dependency on Newtonsoft.Json, now using `System.Text.Json`.
+- Improved null handling with nullable reference types.
+- Simplified API calls using `HttpClient.PostAsJsonAsync`.
+- Enhanced streaming support with `IAsyncEnumerable`.
 
 ## Contributing
 
@@ -128,4 +129,5 @@ This library is licensed under the MIT License. See the LICENSE file for more in
 
 ## Special Thanks
 
-Marcus Cazzola, who did some of the heavy lifting.  And Joaquin Grech for coaxing me to kick NewtonSoft to the curb.
+- Marcus Cazzola for significant contributions to the library's development.
+- Joaquin Grech for advocating the transition from Newtonsoft.Json to System.Text.Json.

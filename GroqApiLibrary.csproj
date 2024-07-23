@@ -6,10 +6,34 @@
     <Nullable>enable</Nullable>
     <BaseOutputPath>C:\DLLs\GroqApiLibrary\bin</BaseOutputPath>
     <OutputType>Library</OutputType>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>Groq API Library</Title>
+	<PackageReadmeFile>README.md</PackageReadmeFile>
+	<Authors>J. Gravelle</Authors>
+	<Description>This library provides a simple interface to interact with the Groq AI API. It allows you to send requests to the API and receive responses asynchronously using .NET 8.
+</Description>
+	<Copyright>©2024 - J. Gravelle</Copyright>
+	<PackageProjectUrl>https://console.groq.com/docs/libraries</PackageProjectUrl>
+	<RepositoryUrl>https://github.com/jgravelle/GroqApiLibrary</RepositoryUrl>
+	<PackageIcon>g_icon.png</PackageIcon>
+	<RepositoryType>git</RepositoryType>
+	<PackageTags>Groq, API, Windows, .NET, Core</PackageTags>
+	<PackAsTool>True</PackAsTool>
+	<AssemblyVersion>1.0.0.1</AssemblyVersion>
+	<FileVersion>1.0.0.1</FileVersion>
+	<Version>1.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components" Version="8.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Components" Version="8.0.7" />
+	<None Include="README.md" Pack="True" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="g_icon.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>
