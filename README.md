@@ -11,7 +11,7 @@ To use this library in your .NET 8 project:
 
 ## Usage
 
-1. Create an instance of the `GroqApiClient` class, providing your API key.
+1. Create an instance of the `GroqApiClient` class, providing your API key. The client will automatically trim any whitespace or newline characters from the key.
 2. Create a `JsonObject` with your request parameters as documented in the Groq API documentation.
 3. Use the client to send requests and receive responses.
 
@@ -110,6 +110,7 @@ class Program
 - Supports both synchronous and streaming API calls.
 - Implements `IDisposable` for proper resource management.
 - Nullable aware, helping to prevent null reference exceptions.
+- Automatically handles API keys with whitespace or newline characters.
 
 ## Latest Updates
 
@@ -118,6 +119,7 @@ class Program
 - Improved null handling with nullable reference types.
 - Simplified API calls using `HttpClient.PostAsJsonAsync`.
 - Enhanced streaming support with `IAsyncEnumerable`.
+- Added automatic cleaning of API keys to prevent formatting issues.
 
 ## Contributing
 
