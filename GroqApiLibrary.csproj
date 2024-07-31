@@ -10,7 +10,7 @@
     <Title>Groq API Library</Title>
 	<PackageReadmeFile>README.md</PackageReadmeFile>
 	<Authors>J. Gravelle</Authors>
-	<Description>This is the first package listed in the Groq.com documentation at:  https://console.groq.com/docs/libraries  This library provides a simple interface to interact with the Groq AI API. It allows you to send requests to the API and receive responses asynchronously using .NET 8.
+	<Description>This is the first package listed in the Groq.com documentation at:  https://console.groq.com/docs/libraries  This library provides a simple interface to interact with the Groq AI API. It allows you to send requests to the API and receive responses asynchronously using .NET 8.  Now with Whisper text-to-speech support.
 </Description>
 	<Copyright>©2024 - J. Gravelle</Copyright>
 	<PackageProjectUrl>https://console.groq.com/docs/libraries</PackageProjectUrl>
@@ -19,9 +19,9 @@
 	<RepositoryType>git</RepositoryType>
 	<PackageTags>Groq, API, Windows, .NET, Core</PackageTags>
 	<PackAsTool>True</PackAsTool>
-	<AssemblyVersion>1.0.0.3</AssemblyVersion>
-	<FileVersion>1.0.0.3</FileVersion>
-	<Version>1.0.3</Version>
+	<AssemblyVersion>1.0.0.4</AssemblyVersion>
+	<FileVersion>1.0.0.4</FileVersion>
+	<Version>1.0.4</Version>
   </PropertyGroup>
 
   <ItemGroup>
