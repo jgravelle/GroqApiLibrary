@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -28,7 +27,13 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> CreateChatCompletionAsync(JsonObject request)
         {
             var response = await _httpClient.PostAsJsonAsync(BaseUrl + ChatCompletionsEndpoint, request);
-            response.EnsureSuccessStatusCode();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new HttpRequestException($"API request failed with status code {response.StatusCode}. Response content: {errorContent}");
+            }
+
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
@@ -40,7 +45,7 @@ namespace GroqApiLibrary
             using var response = await _httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
             using var stream = await response.Content.ReadAsStreamAsync();
-            using var reader = new StreamReader(stream);
+            using var reader = new System.IO.StreamReader(stream);
             string? line;
             while ((line = await reader.ReadLineAsync()) != null)
             {
@@ -98,10 +103,116 @@ namespace GroqApiLibrary
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
+        public async Task<string> RunConversationWithToolsAsync(string userPrompt, List<Tool> tools, string model, string systemMessage)
+        {
+            try
+            {
+                var messages = new List<JsonObject>
+                {
+                    new JsonObject
+                    {
+                        ["role"] = "system",
+                        ["content"] = systemMessage
+                    },
+                    new JsonObject
+                    {
+                        ["role"] = "user",
+                        ["content"] = userPrompt
+                    }
+                };
+
+                var request = new JsonObject
+                {
+                    ["model"] = model,
+                    ["messages"] = JsonSerializer.SerializeToNode(messages),
+                    ["tools"] = JsonSerializer.SerializeToNode(tools.Select(t => new
+                    {
+                        type = t.Type,
+                        function = new
+                        {
+                            name = t.Function.Name,
+                            description = t.Function.Description,
+                            parameters = t.Function.Parameters
+                        }
+                    })),
+                    ["tool_choice"] = "auto"
+                };
+
+                Console.WriteLine($"Sending request to API: {JsonSerializer.Serialize(request, new JsonSerializerOptions { WriteIndented = true })}");
+
+                var response = await CreateChatCompletionAsync(request);
+                var responseMessage = response?["choices"]?[0]?["message"]?.AsObject();
+                var toolCalls = responseMessage?["tool_calls"]?.AsArray();
+
+                if (toolCalls != null && toolCalls.Count > 0)
+                {
+                    messages.Add(responseMessage);
+                    foreach (var toolCall in toolCalls)
+                    {
+                        var functionName = toolCall?["function"]?["name"]?.GetValue<string>();
+                        var functionArgs = toolCall?["function"]?["arguments"]?.GetValue<string>();
+                        var toolCallId = toolCall?["id"]?.GetValue<string>();
+
+                        if (!string.IsNullOrEmpty(functionName) && !string.IsNullOrEmpty(functionArgs))
+                        {
+                            var tool = tools.Find(t => t.Function.Name == functionName);
+                            if (tool != null)
+                            {
+                                var functionResponse = await tool.Function.ExecuteAsync(functionArgs);
+                                messages.Add(new JsonObject
+                                {
+                                    ["tool_call_id"] = toolCallId,
+                                    ["role"] = "tool",
+                                    ["name"] = functionName,
+                                    ["content"] = functionResponse
+                                });
+                            }
+                        }
+                    }
+
+                    request["messages"] = JsonSerializer.SerializeToNode(messages);
+                    var secondResponse = await CreateChatCompletionAsync(request);
+                    return secondResponse?["choices"]?[0]?["message"]?["content"]?.GetValue<string>() ?? string.Empty;
+                }
+
+                return responseMessage?["content"]?.GetValue<string>() ?? string.Empty;
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"HTTP request error: {ex.Message}");
+                throw;
+            }
+            catch (JsonException ex)
+            {
+                Console.WriteLine($"JSON parsing error: {ex.Message}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Unexpected error: {ex.Message}");
+                throw;
+            }
+        }
+
         public void Dispose()
         {
             _httpClient.Dispose();
             GC.SuppressFinalize(this);
         }
+    }
+
+
+    public class Tool
+    {
+        public string Type { get; set; } = "function";
+        public Function Function { get; set; }
+    }
+
+    public class Function
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public JsonObject Parameters { get; set; }
+        public Func<string, Task<string>> ExecuteAsync { get; set; }
     }
 }

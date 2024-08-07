@@ -5,6 +5,14 @@ VisualStudioVersion = 17.10.34607.79
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GroqApiLibrary", "GroqApiLibrary.csproj", "{50F29681-3196-4C4E-90F5-DAFBE4399F2E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroqToolLibrary", "..\GroqToolLibrary\GroqToolLibrary.csproj", "{D8808135-FB38-407B-ADEA-1E8D71834F9F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroqToolsCLI", "..\GroqToolsCLI\GroqToolsCLI.csproj", "{F6652B46-0429-4ED3-B37F-E6AB2FD63D06}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroqAgentLibrary", "..\GroqAgentLibrary\GroqAgentLibrary.csproj", "{3ABDD66D-1546-40F2-807F-CAFA8447BF16}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GroqAgentsCLI", "..\GroqAgentsCLI\GroqAgentsCLI.csproj", "{F88122E9-9243-4BB1-874F-797801542870}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,11 +23,28 @@ Global
 		{50F29681-3196-4C4E-90F5-DAFBE4399F2E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{50F29681-3196-4C4E-90F5-DAFBE4399F2E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{50F29681-3196-4C4E-90F5-DAFBE4399F2E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D8808135-FB38-407B-ADEA-1E8D71834F9F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D8808135-FB38-407B-ADEA-1E8D71834F9F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D8808135-FB38-407B-ADEA-1E8D71834F9F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D8808135-FB38-407B-ADEA-1E8D71834F9F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F6652B46-0429-4ED3-B37F-E6AB2FD63D06}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F6652B46-0429-4ED3-B37F-E6AB2FD63D06}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F6652B46-0429-4ED3-B37F-E6AB2FD63D06}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F6652B46-0429-4ED3-B37F-E6AB2FD63D06}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3ABDD66D-1546-40F2-807F-CAFA8447BF16}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3ABDD66D-1546-40F2-807F-CAFA8447BF16}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3ABDD66D-1546-40F2-807F-CAFA8447BF16}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3ABDD66D-1546-40F2-807F-CAFA8447BF16}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F88122E9-9243-4BB1-874F-797801542870}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F88122E9-9243-4BB1-874F-797801542870}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F88122E9-9243-4BB1-874F-797801542870}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F88122E9-9243-4BB1-874F-797801542870}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {A9457517-818A-4F09-9083-1A788B2B1C99}
+		        SolutionGuid = {A9457517-818A-4F09-9083-1A788B2B1C99}
+		SolutionGuid = {36BD0126-40D8-4A1D-A015-95DFF6423261}
 	EndGlobalSection
 EndGlobal
