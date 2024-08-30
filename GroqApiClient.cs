@@ -103,6 +103,17 @@ namespace GroqApiLibrary
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
+        public async Task<JsonObject?> ListModelsAsync()
+        {
+            HttpResponseMessage response = await _httpClient.GetAsync($"{BaseUrl}/models");
+            response.EnsureSuccessStatusCode();
+
+            string responseString = await response.Content.ReadAsStringAsync();
+            JsonObject? responseJson = JsonSerializer.Deserialize<JsonObject>(responseString);
+
+            return responseJson;
+        }
+
         public async Task<string> RunConversationWithToolsAsync(string userPrompt, List<Tool> tools, string model, string systemMessage)
         {
             try

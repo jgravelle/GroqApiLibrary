@@ -9,6 +9,7 @@ Welcome to the Groq API C# Client Library! This powerful and flexible library pr
 - 🌐 **Audio Translation**: Translate audio content across languages
 - 🛠️ **Tool Usage**: Extend AI capabilities with custom tools
 - 🌊 **Streaming Support**: Real-time responses for interactive applications
+- 📋 **Model Listing**: Retrieve available AI models
 
 ## 📦 Installation
 
@@ -182,16 +183,23 @@ var result = await groqApi.RunConversationWithToolsAsync(userPrompt, tools, mode
 Console.WriteLine(result);
 ```
 
+### Listing Available Models
+
+To retrieve a list of available AI models:
+
+```csharp
+var modelsResponse = await groqApi.ListModelsAsync();
+if (modelsResponse != null && modelsResponse.TryGetPropertyValue("data", out var dataNode))
+{
+    var models = dataNode.AsArray();
+    foreach (var model in models)
+    {
+        Console.WriteLine(model?["id"]?.GetValue<string>());
+    }
+}
+```
+
 ## 🎛️ Advanced Configuration
-
-### Supported Models
-
-Our library supports a wide range of Groq models, including:
-
-- mixtral-8x7b-32768
-- llama3-70b-8192
-- llama3-8b-8192
-- gemma-7b-it
 
 ### Error Handling
 
@@ -226,7 +234,7 @@ We welcome contributions to the Groq API C# Client Library! If you have suggesti
 ## 📄 License
 
 This library is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-Mention J. Gravelle if you use this code.  He's sort of full of himself.
+Mention J. Gravelle if you use this code. He's sort of full of himself.
 
 ## 🙏 Acknowledgements
 
