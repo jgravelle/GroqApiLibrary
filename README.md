@@ -2,6 +2,9 @@
 
 Welcome to the Groq API C# Client Library! This powerful and flexible library provides a seamless interface to interact with the cutting-edge Groq AI API. Designed for .NET 8 and above, our library offers a range of features to enhance your AI-powered applications.
 
+![image](https://github.com/user-attachments/assets/6ee00a85-1efc-42ec-a96f-e35626c57f9e)
+
+
 ## 🌟 Features
 
 - 💬 **Chat Completions**: Engage in dynamic conversations with AI models
@@ -244,3 +247,5 @@ Mention J. Gravelle if you use this code. He's sort of full of himself.
 ---
 
 We hope you enjoy using the Groq API C# Client Library! If you have any questions or need further assistance, please open an issue in this repository. Happy coding! 🚀
+
+![image](https://github.com/user-attachments/assets/76763f58-806b-4f0e-a618-eb12954a708b)
