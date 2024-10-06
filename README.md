@@ -236,7 +236,7 @@ We welcome contributions to the Groq API C# Client Library! If you have suggesti
 
 ## 📄 License
 
-This library is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This library is licensed under the MIT License.
 Mention J. Gravelle if you use this code. He's sort of full of himself.
 
 ## 🙏 Acknowledgements
