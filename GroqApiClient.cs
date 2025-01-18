@@ -18,10 +18,23 @@ namespace GroqApiLibrary
         private const string TranscriptionsEndpoint = "/audio/transcriptions";
         private const string TranslationsEndpoint = "/audio/translations";
 
+        private const string VisionModels = "llama-3.2-90b-vision-preview,llama-3.2-11b-vision-preview";
+        private const int MAX_IMAGE_SIZE_MB = 20;
+        private const int MAX_BASE64_SIZE_MB = 4;
+
         public GroqApiClient(string apiKey)
         {
             _httpClient = new HttpClient();
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        }
+
+        private async Task<string> ConvertImageToBase64(string imagePath)
+        {
+            if (!File.Exists(imagePath))
+                throw new FileNotFoundException($"Image file not found: {imagePath}");
+
+            byte[] imageBytes = await File.ReadAllBytesAsync(imagePath);
+            return Convert.ToBase64String(imageBytes);
         }
 
         public async Task<JsonObject?> CreateChatCompletionAsync(JsonObject request)
@@ -101,6 +114,190 @@ namespace GroqApiLibrary
             var response = await _httpClient.PostAsync(BaseUrl + TranslationsEndpoint, content);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
+        public async Task<JsonObject?> CreateVisionCompletionAsync(JsonObject request)
+        {
+            ValidateVisionModel(request);
+            return await CreateChatCompletionAsync(request);
+        }
+
+        public async Task<JsonObject?> CreateVisionCompletionWithImageUrlAsync(
+            string imageUrl,
+            string prompt,
+            string model = "llama-3.2-90b-vision-preview",
+            float? temperature = null)
+        {
+            ValidateImageUrl(imageUrl);
+
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                ["messages"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["role"] = "user",
+                        ["content"] = new JsonArray
+                        {
+                            new JsonObject
+                            {
+                                ["type"] = "text",
+                                ["text"] = prompt
+                            },
+                            new JsonObject
+                            {
+                                ["type"] = "image_url",
+                                ["image_url"] = new JsonObject
+                                {
+                                    ["url"] = imageUrl
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            if (temperature.HasValue)
+            {
+                request["temperature"] = temperature.Value;
+            }
+
+            return await CreateVisionCompletionAsync(request);
+        }
+
+        public async Task<JsonObject?> CreateVisionCompletionWithBase64ImageAsync(
+            string imagePath,
+            string prompt,
+            string model = "llama-3.2-90b-vision-preview",
+            float? temperature = null)
+        {
+            var base64Image = await ConvertImageToBase64(imagePath);
+            ValidateBase64Size(base64Image);
+
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                ["messages"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["role"] = "user",
+                        ["content"] = new JsonArray
+                        {
+                            new JsonObject
+                            {
+                                ["type"] = "text",
+                                ["text"] = prompt
+                            },
+                            new JsonObject
+                            {
+                                ["type"] = "image_url",
+                                ["image_url"] = new JsonObject
+                                {
+                                    ["url"] = $"data:image/jpeg;base64,{base64Image}"
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            if (temperature.HasValue)
+            {
+                request["temperature"] = temperature.Value;
+            }
+
+            return await CreateVisionCompletionAsync(request);
+        }
+
+        public async Task<JsonObject?> CreateVisionCompletionWithToolsAsync(
+            string imageUrl,
+            string prompt,
+            List<Tool> tools,
+            string model = "llama-3.2-90b-vision-preview")
+        {
+            ValidateImageUrl(imageUrl);
+
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                ["messages"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["role"] = "user",
+                        ["content"] = new JsonArray
+                        {
+                            new JsonObject
+                            {
+                                ["type"] = "text",
+                                ["text"] = prompt
+                            },
+                            new JsonObject
+                            {
+                                ["type"] = "image_url",
+                                ["image_url"] = new JsonObject
+                                {
+                                    ["url"] = imageUrl
+                                }
+                            }
+                        }
+                    }
+                },
+                ["tools"] = JsonSerializer.SerializeToNode(tools.Select(t => new
+                {
+                    type = t.Type,
+                    function = new
+                    {
+                        name = t.Function.Name,
+                        description = t.Function.Description,
+                        parameters = t.Function.Parameters
+                    }
+                })),
+                ["tool_choice"] = "auto"
+            };
+
+            return await CreateVisionCompletionAsync(request);
+        }
+
+        public async Task<JsonObject?> CreateVisionCompletionWithJsonModeAsync(
+            string imageUrl,
+            string prompt,
+            string model = "llama-3.2-90b-vision-preview")
+        {
+            ValidateImageUrl(imageUrl);
+
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                ["messages"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["role"] = "user",
+                        ["content"] = new JsonArray
+                        {
+                            new JsonObject
+                            {
+                                ["type"] = "text",
+                                ["text"] = prompt
+                            },
+                            new JsonObject
+                            {
+                                ["type"] = "image_url",
+                                ["image_url"] = new JsonObject
+                                {
+                                    ["url"] = imageUrl
+                                }
+                            }
+                        }
+                    }
+                },
+                ["response_format"] = new JsonObject { ["type"] = "json_object" }
+            };
+
+            return await CreateVisionCompletionAsync(request);
         }
 
         public async Task<JsonObject?> ListModelsAsync()
@@ -204,6 +401,33 @@ namespace GroqApiLibrary
                 throw;
             }
         }
+
+        private void ValidateVisionModel(JsonObject request)
+        {
+            var model = request["model"]?.GetValue<string>();
+            if (string.IsNullOrEmpty(model) || !VisionModels.Contains(model))
+            {
+                throw new ArgumentException($"Invalid vision model. Must be one of: {VisionModels}");
+            }
+        }
+
+        private void ValidateBase64Size(string base64String)
+        {
+            double sizeInMB = (base64String.Length * 3.0 / 4.0) / (1024 * 1024);
+            if (sizeInMB > MAX_BASE64_SIZE_MB)
+                throw new ArgumentException($"Base64 encoded image exceeds maximum size of {MAX_BASE64_SIZE_MB}MB");
+        }
+
+        private void ValidateImageUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                throw new ArgumentException("Image URL cannot be null or empty");
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+                throw new ArgumentException("Invalid image URL format");
+        }
+
+
 
         public void Dispose()
         {

@@ -108,6 +108,17 @@ namespace GroqApiLibrary
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
+        public async Task<JsonObject?> ListModelsAsync()
+        {
+            HttpResponseMessage response = await _httpClient.GetAsync($"{BaseUrl}/models");
+            response.EnsureSuccessStatusCode();
+
+            string responseString = await response.Content.ReadAsStringAsync();
+            JsonObject? responseJson = JsonSerializer.Deserialize<JsonObject>(responseString);
+
+            return responseJson;
+        }
+
         public async Task<string> RunConversationWithToolsAsync(string userPrompt, List<Tool> tools, string model, string systemMessage)
         {
             try
@@ -293,6 +304,7 @@ namespace GroqApiLibrary
             string? prompt = null, string responseFormat = "json", string? language = null, float? temperature = null);
         Task<JsonObject?> CreateTranslationAsync(Stream audioFile, string fileName, string model,
             string? prompt = null, string responseFormat = "json", float? temperature = null);
+        Task<JsonObject?> ListModelsAsync();
         Task<string> RunConversationWithToolsAsync(string userPrompt, List<Tool> tools, string model, string systemMessage);
     }
 }
@@ -580,7 +592,12 @@ namespace GroqToolLibrary.WebTools
 
         private List<Dictionary<string, string>> WebSearch(string query, int numResults)
         {
-            string url = $"https://www.google.com/search?q={Uri.EscapeDataString(query)}&num={numResults}";
+            // Assume 'query' contains the user's search query
+            string sanitizedQuery = query.Trim('"', '\''); // Remove leading and trailing quotes
+
+            // Construct the URL
+            string url = $"https://www.google.com/search?q={Uri.EscapeDataString(sanitizedQuery)}&num={numResults}";
+
 
             _driver.Navigate().GoToUrl(url);
 
@@ -645,6 +662,193 @@ namespace GroqToolLibrary.WebTools
         {
             _driver?.Quit();
             _driver?.Dispose();
+        }
+    }
+}
+```
+
+## C:\DLLs\GroqToolLibrary\WebTools\WebWeatherTool.cs
+
+```
+using System;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Web;
+using System.Text.Json;
+using System.Collections.Generic;
+using System.Diagnostics;
+
+namespace GroqToolLibrary.WebTools
+{
+    public class WebWeatherTool : BaseTool
+    {
+        private const string BASE_URL = "https://weathermateplus.com/api/location/";
+        private static readonly HttpClient client = new HttpClient();
+
+        public override async Task<object> ExecuteAsync(params object[] args)
+        {
+            if (args.Length != 1 || !(args[0] is string address))
+                throw new ArgumentException("Invalid argument. Expected a single string address.");
+
+            try
+            {
+                return await FetchWeatherAsync(address);
+            }
+            catch (HttpRequestException e) when (e.StatusCode == System.Net.HttpStatusCode.BadGateway
+                                              || e.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
+            {
+                return new Dictionary<string, object>
+                {
+                    ["error"] = $"The weather service is temporarily unavailable. Please try again later. (Status: {e.StatusCode})"
+                };
+            }
+            catch (Exception e)
+            {
+                return new Dictionary<string, object>
+                {
+                    ["error"] = $"An error occurred while fetching weather data: {e.Message}"
+                };
+            }
+        }
+
+        private async Task<Dictionary<string, object>> FetchWeatherAsync(string address)
+        {
+            try
+            {
+                string encodedAddress = HttpUtility.UrlEncode(address);
+                string url = $"{BASE_URL}?address={encodedAddress}";
+
+                HttpResponseMessage response = await client.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+                string responseBody = await response.Content.ReadAsStringAsync();
+
+                JsonDocument data = JsonDocument.Parse(responseBody);
+                return FormatOutput(ExtractRelevantData(data.RootElement));
+            }
+            catch (HttpRequestException e)
+            {
+                return HandleError($"Error fetching weather data: {e.Message}");
+            }
+            catch (JsonException e)
+            {
+                return HandleError($"Error parsing weather data: {e.Message}");
+            }
+        }
+
+        private Dictionary<string, object> ExtractRelevantData(JsonElement data)
+        {
+            return new Dictionary<string, object>
+            {
+                ["location"] = data.GetProperty("location"),
+                ["currentObservation"] = data.GetProperty("currentObservation"),
+                ["day1"] = data.GetProperty("days").GetArrayLength() > 0 ? data.GetProperty("days")[0] : null
+            };
+        }
+
+        private Dictionary<string, object> FormatOutput(Dictionary<string, object> result)
+        {
+            try
+            {
+                var formatted = new Dictionary<string, object>
+                {
+                    ["location"] = GetPropertyAsString(result["location"], "areaDescription"),
+                    ["current"] = new Dictionary<string, object>
+                    {
+                        ["temperature"] = GetPropertyAsString(result["currentObservation"], "temperature"),
+                        ["weather"] = GetPropertyAsString(result["currentObservation"], "weather"),
+                        ["windSpeed"] = GetPropertyAsString(result["currentObservation"], "windSpeed"),
+                        ["windDirection"] = GetPropertyAsString(result["currentObservation"], "windDirection")
+                    },
+                    ["forecast"] = new Dictionary<string, object>()
+                };
+
+                if (result["day1"] != null)
+                {
+                    formatted["forecast"] = new Dictionary<string, object>
+                    {
+                        ["temperature"] = GetPropertyAsString(result["day1"], "temperature"),
+                        ["shortForecast"] = GetPropertyAsString(result["day1"], "shortForecast"),
+                        ["windSpeed"] = GetPropertyAsString(result["day1"], "windSpeed"),
+                        ["windDirection"] = GetPropertyAsString(result["day1"], "windDirection"),
+                        ["precipitationProbability"] = GetPropertyAsString(result["day1"], "probabilityOfPrecipitation")
+                    };
+                }
+
+                return formatted;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in FormatOutput: {ex.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                return new Dictionary<string, object> { ["error"] = $"Error formatting weather data: {ex.Message}" };
+            }
+        }
+
+        private string GetPropertyAsString(object obj, string propertyName)
+        {
+            try
+            {
+                if (obj is JsonElement element)
+                {
+                    if (element.TryGetProperty(propertyName, out JsonElement property))
+                    {
+                        return property.ValueKind switch
+                        {
+                            JsonValueKind.String => property.GetString(),
+                            JsonValueKind.Number => property.GetDouble().ToString(),
+                            _ => property.ToString()
+                        };
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Property {propertyName} not found in JsonElement");
+                        return string.Empty;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Object is not a JsonElement. Type: {obj?.GetType().Name ?? "null"}");
+                    return string.Empty;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetPropertyAsString for property {propertyName}: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        private string GetValueAsString(JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.String:
+                    return element.GetString();
+                case JsonValueKind.Number:
+                    return element.GetDouble().ToString();
+                default:
+                    return element.ToString();
+            }
+        }
+
+        private Dictionary<string, object> HandleError(string errorMessage)
+        {
+            Console.WriteLine($"WebWeatherTool error: {errorMessage}");
+
+            return new Dictionary<string, object>
+            {
+                ["error"] = errorMessage,
+                ["status"] = "error"
+            };
+        }
+
+        public override string ValidateInput(IDictionary<string, object> data)
+        {
+            if (!data.ContainsKey("address"))
+                return "Address is required.";
+            if (!(data["address"] is string))
+                return "Address must be a string.";
+            return null;
         }
     }
 }
@@ -895,25 +1099,254 @@ namespace GroqAgentLibrary
 }
 ```
 
+## C:\DLLs\GroqAgentLibrary\BossAgent.cs
+
+```
+using GroqAgentLibrary;
+using GroqApiLibrary;
+
+public class BossAgent : BaseAgent
+{
+    private readonly WebAgent _webAgent;
+    private readonly bool _debug;
+    private const int MAX_DEFER_ATTEMPTS = 5;
+
+    public BossAgent(ILlmProvider llmProvider, string model, bool debug = false)
+        : base(llmProvider, model)
+    {
+        _webAgent = new WebAgent(llmProvider, model, debug);
+        _debug = debug;
+    }
+
+    private async Task<(bool IsSimpleQuery, string Reasoning)> AnalyzeRequestAsync(string request)
+    {
+        var prompt = $@"Analyze the following request:
+
+            '{request}'
+
+            Determine if this is a simple, single-task query or a complex, multi-task query.
+
+            Respond with:
+            1. Either 'SIMPLE' or 'COMPLEX' indicating whether this is a simple or complex query.
+            2. A brief explanation of your reasoning.
+
+            Format your response as: SIMPLE/COMPLEX: Reasoning";
+
+        var response = await Provider.GenerateAsync(prompt);
+        var parts = response.Split(new[] { ':' }, 2);
+
+        if (parts.Length != 2)
+        {
+            throw new FormatException("Unexpected response format from LLM during request analysis.");
+        }
+
+        return (parts[0].Trim().ToUpper() == "SIMPLE", parts[1].Trim());
+    }
+
+    private async Task<object> HandleComplexQueryAsync(string request)
+    {
+        var tasks = await BreakdownRequestAsync(request);
+        var responses = new List<string>();
+
+        foreach (var task in tasks)
+        {
+            var taskResponse = await HandleSimpleQueryAsync(task);
+            responses.Add($"Task: {task}\nResponse: {taskResponse}\n");
+        }
+
+        return CombineResponses(responses);
+    }
+
+    private async Task<object> HandleQueryAsync(string request, int deferCount)
+    {
+        if (deferCount >= MAX_DEFER_ATTEMPTS)
+        {
+            return "I apologize, but I'm having trouble finding the information you requested. Could you please rephrase your question or ask about something else?";
+        }
+
+        var analysisResult = await AnalyzeTaskAsync(request);
+
+        if (analysisResult.CanHandleDirect)
+        {
+            return await GenerateDirectResponseAsync(request, analysisResult.Reasoning);
+        }
+        else
+        {
+            LogDebug($"Deferring to WebAgent (Attempt {deferCount + 1}). Reasoning: {analysisResult.Reasoning}");
+            var webAgentResponse = await _webAgent.ProcessRequestAsync(request);
+            var reviewResult = await ReviewWebAgentResponseAsync(request, webAgentResponse.ToString());
+
+            if (reviewResult.NeedsFollowUp)
+            {
+                return await HandleQueryAsync(reviewResult.FollowUpQuery, deferCount + 1);
+            }
+            else
+            {
+                return reviewResult.Response;
+            }
+        }
+    }
+
+    private async Task<object> HandleSimpleQueryAsync(string request)
+    {
+        var analysisResult = await AnalyzeTaskAsync(request);
+
+        if (analysisResult.CanHandleDirect)
+        {
+            return await GenerateDirectResponseAsync(request, analysisResult.Reasoning);
+        }
+        else
+        {
+            LogDebug($"Deferring to WebAgent. Reasoning: {analysisResult.Reasoning}");
+            var webAgentResponse = await _webAgent.ProcessRequestAsync(request);
+            return await ReviewWebAgentResponseAsync(request, webAgentResponse.ToString());
+        }
+    }
+
+    private async Task<List<string>> BreakdownRequestAsync(string request)
+    {
+        var prompt = $@"Break down the following request into individual tasks:
+
+            '{request}'
+
+            Each task should be a separate, actionable item. Return the tasks as a numbered list, with each task on a new line. Do not include any additional text or explanations.";
+
+        var response = await Provider.GenerateAsync(prompt);
+        return response.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                       .Select(line => line.TrimStart('1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '.', ' '))
+                       .ToList();
+    }
+
+    private async Task<(bool CanHandleDirect, string Reasoning)> AnalyzeTaskAsync(string task)
+    {
+        var prompt = $@"Analyze the following task:
+
+            '{task}'
+
+            Determine if you can confidently and accurately complete this task based solely on your current knowledge, without needing to search for additional information.
+
+            Respond with:
+            1. Either 'YES' or 'NO' indicating whether you can handle this task directly.
+            2. A brief explanation of your reasoning.
+
+            Format your response as: YES/NO: Reasoning";
+
+        var response = await Provider.GenerateAsync(prompt);
+        var parts = response.Split(new[] { ':' }, 2);
+
+        if (parts.Length != 2)
+        {
+            throw new FormatException("Unexpected response format from LLM during task analysis.");
+        }
+
+        return (parts[0].Trim().ToUpper() == "YES", parts[1].Trim());
+    }
+
+    private async Task<string> GenerateDirectResponseAsync(string task, string reasoning)
+    {
+        LogDebug($"Generating direct response for task: {task}. Reasoning: {reasoning}");
+
+        var prompt = $@"Based on the task:
+
+            '{task}'
+
+            And your reasoning that you can handle this directly:
+
+            '{reasoning}'
+
+            Please provide a comprehensive, accurate, and helpful response to complete this task.";
+
+        return await Provider.GenerateAsync(prompt);
+    }
+
+    public override async Task<object> ProcessRequestAsync(string request)
+    {
+        try
+        {
+            return await HandleQueryAsync(request, 0);
+        }
+        catch (Exception e)
+        {
+            LogDebug($"Error in BossAgent: {e.Message}");
+            return $"I apologize, but an error occurred while processing your request: {e.Message}";
+        }
+    }
+
+    private async Task<(bool NeedsFollowUp, string Response, string FollowUpQuery)> ReviewWebAgentResponseAsync(string originalTask, string webAgentResponse)
+    {
+        var prompt = $@"You are reviewing a response generated by another AI agent to the following task:
+
+Original Task: '{originalTask}'
+
+WebAgent's Response:
+{webAgentResponse}
+
+Your task is to review this response and determine if it adequately addresses the original task. 
+
+If it does, return the response prefixed with 'SUFFICIENT:'. 
+
+If it partially addresses the task but needs more information, return the response prefixed with 'PARTIAL:' and include a follow-up question to get the missing information.
+
+If it doesn't address the task at all, return 'INSUFFICIENT:' followed by a rephrased version of the original task.
+
+Ensure the final response is comprehensive, accurate, and directly addresses the original task.";
+
+        var reviewResult = await Provider.GenerateAsync(prompt);
+
+        if (reviewResult.StartsWith("SUFFICIENT:"))
+        {
+            return (false, reviewResult.Substring(11).Trim(), null);
+        }
+        else if (reviewResult.StartsWith("PARTIAL:"))
+        {
+            var parts = reviewResult.Substring(8).Split("Follow-up question:", 2, StringSplitOptions.TrimEntries);
+            return (true, parts[0], parts[1]);
+        }
+        else if (reviewResult.StartsWith("INSUFFICIENT:"))
+        {
+            return (true, null, reviewResult.Substring(13).Trim());
+        }
+        else
+        {
+            LogDebug("Unexpected review result format. Returning original WebAgent response.");
+            return (false, webAgentResponse, null);
+        }
+    }
+
+    private string CombineResponses(List<string> responses)
+    {
+        return string.Join("\n\n", responses);
+    }
+
+    private void LogDebug(string message)
+    {
+        if (_debug)
+        {
+            Console.WriteLine($"[DEBUG] BossAgent: {message}");
+        }
+    }
+}
+```
+
 ## C:\DLLs\GroqAgentLibrary\WebAgent.cs
 
 ```
 using GroqApiLibrary;
 using GroqToolLibrary.WebTools;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace GroqAgentLibrary
 {
     public class WebAgent : BaseAgent
     {
-        private readonly List<string> _skipDomains = new List<string>
-        {
-            "reddit.com",
-            // Add more domains to skip here
-        };
-
         private readonly WebSearchTool _webSearchTool;
         private readonly WebGetLinksTool _webGetLinksTool;
         private readonly WebContentTool _webContentTool;
+        private readonly WebWeatherTool _webWeatherTool;
         private readonly bool _debug;
 
         public WebAgent(ILlmProvider llmProvider, string model, bool debug = false)
@@ -922,6 +1355,7 @@ namespace GroqAgentLibrary
             _webSearchTool = new WebSearchTool();
             _webGetLinksTool = new WebGetLinksTool();
             _webContentTool = new WebContentTool();
+            _webWeatherTool = new WebWeatherTool();
             _debug = debug;
         }
 
@@ -929,7 +1363,43 @@ namespace GroqAgentLibrary
         {
             try
             {
-                return await ProcessWebSearchAsync(request);
+                if (IsWeatherQuery(request))
+                {
+                    return await ProcessWeatherRequestAsync(request);
+                }
+
+                // Step 1: Determine the best query for WebSearchTool
+                string searchQuery = await DetermineSearchQueryAsync(request);
+
+                // Step 2: Perform web search
+                var searchResults = await PerformWebSearchAsync(searchQuery);
+                if (!searchResults.Any())
+                {
+                    return "I'm sorry, but I couldn't find any relevant information for your request.";
+                }
+
+                // Step 3: Analyze search results
+                var initialSynopsis = await AnalyzeSearchResultsAsync(searchResults, request);
+                if (initialSynopsis.Contains("SUFFICIENT"))
+                {
+                    return initialSynopsis.Replace("SUFFICIENT", "").Trim();
+                }
+
+                // Step 4: Retrieve detailed content from top search results
+                var detailedContent = await RetrieveDetailedContentAsync(searchResults.ToList());
+
+                // Step 5: Analyze detailed content
+                var detailedSynopsis = await AnalyzeDetailedContentAsync(detailedContent, request);
+                if (detailedSynopsis.Contains("SUFFICIENT"))
+                {
+                    return detailedSynopsis.Replace("SUFFICIENT", "").Trim();
+                }
+
+                // Step 6: Collect additional links if needed
+                var additionalLinks = await CollectAdditionalLinksAsync(searchResults.First().Url);
+
+                // Step 7: Prepare final response
+                return await PrepareFinalResponseAsync(detailedSynopsis, additionalLinks, request);
             }
             catch (Exception e)
             {
@@ -938,130 +1408,145 @@ namespace GroqAgentLibrary
             }
         }
 
-        private async Task<string> ProcessWebSearchAsync(string userRequest)
+        private bool IsWeatherQuery(string request)
         {
-            var searchResults = await PerformWebSearchAsync(userRequest);
-            if (!searchResults.Any())
-            {
-                return "I'm sorry, but I couldn't find any relevant information for your request.";
-            }
+            string pattern = @"\b(weather|temperature|forecast|rain|snow|wind|climate)\b";
+            return Regex.IsMatch(request, pattern, RegexOptions.IgnoreCase);
+        }
 
-            var filteredResults = FilterSearchResults(searchResults);
-            if (!filteredResults.Any())
-            {
-                return "I found some results, but they were all from domains I've been instructed to skip. Could you try rephrasing your request?";
-            }
-
-            var allSummaries = new List<string>();
-            foreach (var result in filteredResults)
-            {
-                LogDebug($"Trying URL: {result.Url}");
-                var content = await GetWebContentAsync(result.Url);
-                if (!string.IsNullOrEmpty(content))
-                {
-                    var summary = await SummarizeWebContentAsync(content, userRequest, result.Url, result.Description);
-                    allSummaries.Add(summary);
-                    if (summary.Contains("TERMINATE"))
-                    {
-                        LogDebug($"Satisfactory answer found at {result.Url}");
-                        return summary.Replace("TERMINATE", "").Trim();
-                    }
-                }
-                LogDebug("Moving to next URL as current one did not provide a satisfactory answer.");
-            }
-
-            return allSummaries.Any()
-                ? await CombineSummariesAsync(allSummaries, userRequest)
-                : "I'm sorry, but I couldn't find satisfactory information to answer your request after checking multiple sources.";
+        private async Task<string> DetermineSearchQueryAsync(string userRequest)
+        {
+            var prompt = $"Given the user request: '{userRequest}', provide a concise and effective search query to find relevant information. Return only the search query, nothing else.";
+            return await Provider.GenerateAsync(prompt);
         }
 
         private async Task<List<SearchResult>> PerformWebSearchAsync(string query)
         {
-            try
+            var rawResults = await _webSearchTool.ExecuteAsync(query, 5) as List<Dictionary<string, string>>;
+            if (rawResults == null)
             {
-                var results = await _webSearchTool.ExecuteAsync(query, 5) as List<SearchResult>;
-                LogDebug($"WebSearchTool found {results?.Count ?? 0} results for the query: {query}");
-                LogDebug($"First result: {results?.FirstOrDefault()}");
-                return results ?? new List<SearchResult>();
-            }
-            catch (Exception e)
-            {
-                LogDebug($"Error in WebSearchTool: {e.Message}");
+                LogDebug("WebSearchTool returned null results");
                 return new List<SearchResult>();
             }
+
+            return rawResults.Select(r => new SearchResult
+            {
+                Title = r.TryGetValue("title", out var title) ? title : string.Empty,
+                Url = r.TryGetValue("url", out var url) ? url : string.Empty,
+                Description = r.TryGetValue("description", out var description) ? description : string.Empty
+            }).ToList();
         }
 
-        private List<SearchResult> FilterSearchResults(List<SearchResult> results)
-        {
-            var filteredResults = results.Where(result => !_skipDomains.Any(domain => result.Url.Contains(domain))).ToList();
-            LogDebug($"Filtered out {results.Count - filteredResults.Count} URLs");
-            LogDebug($"Remaining URLs: {string.Join(", ", filteredResults.Select(r => r.Url))}");
-            return filteredResults;
-        }
-
-        private async Task<string> GetWebContentAsync(string url)
+        private async Task<object> ProcessWeatherRequestAsync(string request)
         {
             try
             {
-                var content = await _webContentTool.ExecuteAsync(url) as string;
-                LogDebug($"Successfully retrieved content from {url}");
-                LogDebug($"Content preview: {content?.Substring(0, Math.Min(200, content?.Length ?? 0))}...");
-                return content ?? string.Empty;
+                string location = await ExtractLocationFromRequestAsync(request);
+
+                if (string.IsNullOrEmpty(location))
+                {
+                    return "I'm sorry, but I couldn't identify a location in your weather request. Could you please specify a city or location?";
+                }
+
+                var weatherData = await _webWeatherTool.ExecuteAsync(location) as Dictionary<string, object>;
+
+                if (weatherData == null)
+                {
+                    return "I'm sorry, but I couldn't retrieve the weather information. The weather service might be unavailable.";
+                }
+
+                if (weatherData.ContainsKey("error"))
+                {
+                    return $"I'm sorry, but I couldn't retrieve the weather information for {location}. {weatherData["error"]}";
+                }
+
+                return FormatWeatherResponse(weatherData, request);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                LogDebug($"Error retrieving content from {url}: {e.Message}");
-                return string.Empty;
+                Console.WriteLine($"Error in ProcessWeatherRequestAsync: {ex.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                return $"I apologize, but an error occurred while processing your weather request: {ex.Message}";
             }
         }
 
-        private async Task<string> SummarizeWebContentAsync(string content, string userRequest, string url, string description)
+        private string FormatWeatherResponse(Dictionary<string, object> weatherData, string originalRequest)
         {
-            var summaryPrompt = CreateSummaryPrompt(content, userRequest, url, description);
-            return await Provider.GenerateAsync(summaryPrompt);
+            try
+            {
+                var current = weatherData["current"] as Dictionary<string, object>;
+                var forecast = weatherData["forecast"] as Dictionary<string, object>;
+
+                if (current == null || forecast == null)
+                {
+                    return "I'm sorry, but the weather data seems to be incomplete or in an unexpected format.";
+                }
+
+                var response = $"Here's the weather information for {weatherData["location"]}:\n\n";
+                response += $"Current conditions: {current["temperature"]}°F, {current["weather"]}\n";
+                response += $"Wind: {current["windSpeed"]} {current["windDirection"]}\n\n";
+
+                response += "Today's forecast:\n";
+                response += $"Temperature: {forecast["temperature"]}°F\n";
+                response += $"Conditions: {forecast["shortForecast"]}\n";
+                response += $"Wind: {forecast["windSpeed"]} {forecast["windDirection"]}\n";
+                response += $"Chance of precipitation: {forecast["precipitationProbability"]}%\n";
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in FormatWeatherResponse: {ex.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                return "I apologize, but there was an error formatting the weather information.";
+            }
         }
 
-        protected override string CreateSummaryPrompt(string content, string userRequest)
+        private async Task<string> ExtractLocationFromRequestAsync(string request)
         {
-            throw new InvalidOperationException("Use the overload with URL and description for WebAgent");
+            var prompt = $"Extract the location from this weather-related request: '{request}'. Return only the location name, nothing else.";
+            return await Provider.GenerateAsync(prompt);
         }
 
-        private string CreateSummaryPrompt(string content, string userRequest, string url, string description)
+        private async Task<string> AnalyzeSearchResultsAsync(List<SearchResult> results, string userRequest)
         {
-            return @$"
-            Given the following web content from {url}:
-            Description: {description}
-            Content: {content.Substring(0, Math.Min(2000, content.Length))}
-
-            Respond to the user's request: ""{userRequest}""
-
-            Rules:
-            1. Provide ONLY the specific information requested. Do not include any additional context or explanations.
-            2. If the exact information is not available, provide the closest relevant information without elaboration.
-            3. Use simple, direct language. Avoid introductory phrases or unnecessary words.
-            4. If the information is not relevant to the user's request, respond with ONLY: ""No relevant information found.""
-            5. If you've provided a complete and satisfactory answer, append 'TERMINATE' to the end of your response.
-            6. If the information doesn't completely answer the user's request, do not append 'TERMINATE'.
-            ";
+            var resultsText = string.Join("\n", results.Select(r => $"{r.Title}\n{r.Description}\n{r.Url}"));
+            var prompt = $"Analyze these search results:\n\n{resultsText}\n\nBased on the user request: '{userRequest}', provide a concise synopsis. If the information is sufficient to answer the request, include 'SUFFICIENT' at the end of your response. If not, don't include 'SUFFICIENT'.";
+            return await Provider.GenerateAsync(prompt);
         }
 
-        private async Task<string> CombineSummariesAsync(List<string> summaries, string userRequest)
+        private async Task<List<string>> RetrieveDetailedContentAsync(List<SearchResult> topResults)
         {
-            var combinedPrompt = @$"
-            Given the following summaries from multiple sources:
-            {string.Join(" ", summaries)}
+            var detailedContent = new List<string>();
+            foreach (var result in topResults)
+            {
+                var content = await _webContentTool.ExecuteAsync(result.Url) as string;
+                if (!string.IsNullOrEmpty(content))
+                {
+                    detailedContent.Add(content);
+                }
+            }
+            return detailedContent;
+        }
 
-            Respond to the user's request: ""{userRequest}""
+        private async Task<string> AnalyzeDetailedContentAsync(List<string> detailedContent, string userRequest)
+        {
+            var contentText = string.Join("\n\n", detailedContent.Select((content, index) => $"Content {index + 1}:\n{content.Substring(0, Math.Min(1000, content.Length))}"));
+            var prompt = $"Analyze this detailed content:\n\n{contentText}\n\nBased on the user request: '{userRequest}', provide a comprehensive synopsis. If the information is sufficient to fully answer the request, include 'SUFFICIENT' at the end of your response. If not, don't include 'SUFFICIENT'.";
+            return await Provider.GenerateAsync(prompt);
+        }
 
-            Rules:
-            1. Provide ONLY the specific information requested. Do not include any additional context, explanations, or narrative.
-            2. Use simple, direct language. Avoid introductory phrases or unnecessary words.
-            3. If the summaries contain conflicting information, provide only the most reliable information without mentioning the conflict.
-            4. If the user's request is not fully answered, provide only the available information without mentioning what's missing.
-            5. Your response should be a single, concise sentence or a brief list of facts, whichever is more appropriate for the requested information.
-            6. Do not include any statements about the source of the information or the process of finding it.
-            ";
-            return await Provider.GenerateAsync(combinedPrompt);
+        private async Task<List<string>> CollectAdditionalLinksAsync(string url)
+        {
+            var rawLinks = await _webGetLinksTool.ExecuteAsync(url) as List<Dictionary<string, string>>;
+            return rawLinks?.Select(l => l["Target"]).Take(5).ToList() ?? new List<string>();
+        }
+
+        private async Task<string> PrepareFinalResponseAsync(string synopsis, List<string> additionalLinks, string userRequest)
+        {
+            var linksText = string.Join("\n", additionalLinks);
+            var prompt = $"Given this synopsis:\n\n{synopsis}\n\nAnd these additional links for further information:\n{linksText}\n\nPrepare a final response to the user request: '{userRequest}'. Include the most relevant information from the synopsis and, if appropriate, mention that further information can be found at the provided links.";
+            return await Provider.GenerateAsync(prompt);
         }
 
         private void LogDebug(string message)
@@ -1078,8 +1563,6 @@ namespace GroqAgentLibrary
         public string Title { get; set; }
         public string Url { get; set; }
         public string Description { get; set; }
-
-        public override string ToString() => $"{{Title: {Title}, Url: {Url}, Description: {Description}}}";
     }
 }
 ```
@@ -1107,69 +1590,31 @@ namespace GroqAgentsCLI
                 apiKey = "your-fallback-api-key-here";  // Only as a last resort
             }
 
-            string model = "llama-3.1-8b-instant";  // You might want to make this configurable too
+            string model = "mixtral-8x7b-32768";  // You might want to make this configurable
 
             ILlmProvider llmProvider = new GroqLlmProvider(apiKey, model);
 
-            var webAgent = new WebAgent(llmProvider, model, debug: true);
+            var bossAgent = new BossAgent(llmProvider, model, debug: true);
 
             while (true)
             {
-                DisplayMenu();
-                string choice = Console.ReadLine().Trim();
+                Console.Write("\nEnter your request (or 'exit' to quit): ");
+                string userRequest = Console.ReadLine();
 
-                switch (choice)
+                if (string.IsNullOrWhiteSpace(userRequest) || userRequest.ToLower() == "exit")
                 {
-                    case "1":
-                        await InteractWithWebAgent(webAgent);
-                        break;
-                    case "2":
-                        Console.WriteLine("Thank you for using GroqAgents CLI. Goodbye!");
-                        return;
-                    default:
-                        Console.WriteLine("Invalid choice. Please try again.");
-                        break;
+                    Console.WriteLine("Thank you for using GroqAgents CLI. Goodbye!");
+                    break;
                 }
+
+                object response = await bossAgent.ProcessRequestAsync(userRequest);
+                Console.WriteLine("\nResponse:");
+                Console.WriteLine(response.ToString());
 
                 Console.WriteLine("\nPress any key to continue...");
                 Console.ReadKey();
                 Console.Clear();
             }
-        }
-
-        static void DisplayMenu()
-        {
-            Console.WriteLine("\nPlease select an agent to interact with:");
-            Console.WriteLine("1. Web Agent");
-            Console.WriteLine("2. Exit");
-            Console.Write("Enter your choice (1-2): ");
-        }
-
-        static async Task InteractWithWebAgent(WebAgent webAgent)
-        {
-            while (true)
-            {
-                Console.Write("\nWhat would you like to know? (Type 'back' to return to main menu): ");
-                string userRequest = Console.ReadLine();
-
-                if (string.IsNullOrWhiteSpace(userRequest) || userRequest.ToLower() == "back")
-                {
-                    break;
-                }
-
-                object response = await webAgent.ProcessRequestAsync(userRequest);
-                Console.WriteLine(response.ToString());
-            }
-        }
-    }
-
-    // You need to implement this class
-    public class YourLlmProviderImplementation : ILlmProvider
-    {
-        public Task<string> GenerateAsync(string prompt)
-        {
-            // Implement your LLM provider logic here
-            throw new NotImplementedException();
         }
     }
 }

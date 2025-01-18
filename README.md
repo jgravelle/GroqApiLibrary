@@ -2,9 +2,6 @@
 
 Welcome to the Groq API C# Client Library! This powerful and flexible library provides a seamless interface to interact with the cutting-edge Groq AI API. Designed for .NET 8 and above, our library offers a range of features to enhance your AI-powered applications.
 
-![image](https://github.com/user-attachments/assets/6ee00a85-1efc-42ec-a96f-e35626c57f9e)
-
-
 ## 🌟 Features
 
 - 💬 **Chat Completions**: Engage in dynamic conversations with AI models
@@ -13,6 +10,7 @@ Welcome to the Groq API C# Client Library! This powerful and flexible library pr
 - 🛠️ **Tool Usage**: Extend AI capabilities with custom tools
 - 🌊 **Streaming Support**: Real-time responses for interactive applications
 - 📋 **Model Listing**: Retrieve available AI models
+- 👁️ **Vision Analysis**: Process and analyze images with multimodal models
 
 ## 📦 Installation
 
@@ -102,6 +100,96 @@ await foreach (var chunk in groqApi.CreateChatCompletionStreamAsync(request))
     var delta = chunk?["choices"]?[0]?["delta"]?["content"]?.ToString() ?? string.Empty;
     Console.Write(delta);
 }
+```
+
+### Vision Analysis
+
+#### Basic Image Analysis
+
+```csharp
+var result = await groqApi.CreateVisionCompletionWithImageUrlAsync(
+    "https://example.com/image.jpg",
+    "What's in this image?",
+    "llama-3.2-90b-vision-preview"
+);
+
+Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
+```
+
+#### Local Image Analysis
+
+```csharp
+var result = await groqApi.CreateVisionCompletionWithBase64ImageAsync(
+    "path/to/local/image.jpg",
+    "Describe this image",
+    "llama-3.2-90b-vision-preview"
+);
+
+Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
+```
+
+#### Vision with JSON Mode
+
+```csharp
+var result = await groqApi.CreateVisionCompletionWithJsonModeAsync(
+    "https://example.com/image.jpg",
+    "List all objects in this image in JSON format",
+    "llama-3.2-90b-vision-preview"
+);
+
+Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
+```
+
+#### Vision with Tools
+
+```csharp
+var weatherTool = new Tool
+{
+    Type = "function",
+    Function = new Function
+    {
+        Name = "get_weather",
+        Description = "Get weather information for a location",
+        Parameters = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                ["location"] = new JsonObject
+                {
+                    ["type"] = "string",
+                    ["description"] = "The city and state"
+                }
+            },
+            ["required"] = new JsonArray { "location" }
+        }
+    }
+};
+
+var tools = new List<Tool> { weatherTool };
+var result = await groqApi.CreateVisionCompletionWithToolsAsync(
+    "https://example.com/cityscape.jpg",
+    "What's the weather like in this city?",
+    tools,
+    "llama-3.2-90b-vision-preview"
+);
+
+Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
+```
+
+#### Complex Vision Analysis with VisionAgent
+
+For more complex vision tasks, use the VisionAgent:
+
+```csharp
+var llmProvider = new GroqLlmProvider(apiKey, "llama-3.2-90b-vision-preview");
+var visionAgent = new VisionAgent(llmProvider, "llama-3.2-90b-vision-preview", debug: true);
+
+var result = await visionAgent.ProcessRequestAsync(
+    "Analyze this image and provide historical context: https://example.com/image.jpg"
+);
+
+Console.WriteLine(result);
 ```
 
 ### Audio Transcription
@@ -204,6 +292,21 @@ if (modelsResponse != null && modelsResponse.TryGetPropertyValue("data", out var
 
 ## 🎛️ Advanced Configuration
 
+### Supported Models
+
+Our library supports a wide range of Groq models, including:
+
+- mixtral-8x7b-32768
+- llama3-70b-8192
+- llama3-8b-8192
+- gemma-7b-it
+
+### Supported Vision Models
+
+The library supports the following vision models:
+- llama-3.2-90b-vision-preview: High-capacity vision model
+- llama-3.2-11b-vision-preview: Efficient vision model
+
 ### Error Handling
 
 The library uses exception handling to manage errors. Always wrap your API calls in try-catch blocks for robust error management:
@@ -236,7 +339,7 @@ We welcome contributions to the Groq API C# Client Library! If you have suggesti
 
 ## 📄 License
 
-This library is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This library is licensed under the MIT License.
 Mention J. Gravelle if you use this code. He's sort of full of himself.
 
 ## 🙏 Acknowledgements
@@ -247,5 +350,3 @@ Mention J. Gravelle if you use this code. He's sort of full of himself.
 ---
 
 We hope you enjoy using the Groq API C# Client Library! If you have any questions or need further assistance, please open an issue in this repository. Happy coding! 🚀
-
-![image](https://github.com/user-attachments/assets/76763f58-806b-4f0e-a618-eb12954a708b)
