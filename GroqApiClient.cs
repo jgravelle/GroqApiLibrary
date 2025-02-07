@@ -28,6 +28,12 @@ namespace GroqApiLibrary
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         }
 
+        public GroqApiClient(string apiKey, HttpClient httpClient)
+        {
+            _httpClient = httpClient;
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        }
+
         private async Task<string> ConvertImageToBase64(string imagePath)
         {
             if (!File.Exists(imagePath))
