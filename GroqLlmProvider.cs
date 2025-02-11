@@ -25,6 +25,12 @@ namespace GroqApiLibrary
             _model = model;
         }
 
+        public GroqLlmProvider(string apiKey, string model, HttpClient httpClient)
+        {
+            _client = new GroqApiClient(apiKey, httpClient);
+            _model = model;
+        }
+
         public async Task<string> GenerateAsync(string prompt)
         {
             var request = new JsonObject
