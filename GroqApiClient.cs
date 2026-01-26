@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -10,15 +10,24 @@ using System.Threading.Tasks;
 
 namespace GroqApiLibrary
 {
-    public class GroqApiClient : IDisposable
+    public class GroqApiClient : IGroqApiClient, IDisposable
     {
         private readonly HttpClient _httpClient;
         private const string BaseUrl = "https://api.groq.com/openai/v1";
         private const string ChatCompletionsEndpoint = "/chat/completions";
         private const string TranscriptionsEndpoint = "/audio/transcriptions";
         private const string TranslationsEndpoint = "/audio/translations";
+        private const string SpeechEndpoint = "/audio/speech";
 
-        private const string VisionModels = "llama-3.2-90b-vision-preview,llama-3.2-11b-vision-preview";
+        // Updated vision models to include Llama 4 multimodal models
+        private static readonly HashSet<string> VisionModels = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "llama-3.2-90b-vision-preview",
+            "llama-3.2-11b-vision-preview",
+            "meta-llama/llama-4-scout-17b-16e-instruct",
+            "meta-llama/llama-4-maverick-17b-128e-instruct"
+        };
+
         private const int MAX_IMAGE_SIZE_MB = 20;
         private const int MAX_BASE64_SIZE_MB = 4;
 
@@ -28,10 +37,23 @@ namespace GroqApiLibrary
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         }
 
+        /// <summary>
+        /// Creates a GroqApiClient with an existing HttpClient instance.
+        /// Useful for dependency injection or when you need custom HttpClient configuration.
+        /// </summary>
         public GroqApiClient(string apiKey, HttpClient httpClient)
         {
             _httpClient = httpClient;
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        }
+
+        /// <summary>
+        /// Sets custom headers for requests (e.g., Groq-Model-Version for compound systems)
+        /// </summary>
+        public void SetCustomHeader(string name, string value)
+        {
+            _httpClient.DefaultRequestHeaders.Remove(name);
+            _httpClient.DefaultRequestHeaders.Add(name, value);
         }
 
         private async Task<string> ConvertImageToBase64(string imagePath)
@@ -42,6 +64,8 @@ namespace GroqApiLibrary
             byte[] imageBytes = await File.ReadAllBytesAsync(imagePath);
             return Convert.ToBase64String(imageBytes);
         }
+
+        #region Chat Completions
 
         public async Task<JsonObject?> CreateChatCompletionAsync(JsonObject request)
         {
@@ -64,7 +88,7 @@ namespace GroqApiLibrary
             using var response = await _httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
             using var stream = await response.Content.ReadAsStreamAsync();
-            using var reader = new System.IO.StreamReader(stream);
+            using var reader = new StreamReader(stream);
             string? line;
             while ((line = await reader.ReadLineAsync()) != null)
             {
@@ -78,6 +102,150 @@ namespace GroqApiLibrary
                 }
             }
         }
+
+        /// <summary>
+        /// Creates a chat completion with structured output using JSON Schema.
+        /// Supports strict mode for guaranteed schema compliance on supported models (GPT-OSS 20B/120B).
+        /// </summary>
+        public async Task<JsonObject?> CreateChatCompletionWithStructuredOutputAsync(
+            JsonArray messages,
+            string model,
+            JsonObject jsonSchema,
+            string schemaName = "response",
+            bool strict = false,
+            float? temperature = null,
+            int? maxCompletionTokens = null)
+        {
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                ["messages"] = messages,
+                ["response_format"] = new JsonObject
+                {
+                    ["type"] = "json_schema",
+                    ["json_schema"] = new JsonObject
+                    {
+                        ["name"] = schemaName,
+                        ["strict"] = strict,
+                        ["schema"] = jsonSchema
+                    }
+                }
+            };
+
+            if (temperature.HasValue)
+                request["temperature"] = temperature.Value;
+
+            if (maxCompletionTokens.HasValue)
+                request["max_completion_tokens"] = maxCompletionTokens.Value;
+
+            return await CreateChatCompletionAsync(request);
+        }
+
+        /// <summary>
+        /// Creates a chat completion with reasoning/thinking support.
+        /// For Qwen3 models: use reasoningEffort = "none" to disable, "default" to enable.
+        /// For GPT-OSS models: use reasoningEffort = "low", "medium", or "high".
+        /// </summary>
+        public async Task<JsonObject?> CreateChatCompletionWithReasoningAsync(
+            JsonArray messages,
+            string model,
+            string? reasoningEffort = null,
+            string? reasoningFormat = null,
+            bool? includeReasoning = null,
+            float? temperature = null,
+            int? maxCompletionTokens = null)
+        {
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                ["messages"] = messages
+            };
+
+            if (!string.IsNullOrEmpty(reasoningEffort))
+                request["reasoning_effort"] = reasoningEffort;
+
+            if (!string.IsNullOrEmpty(reasoningFormat))
+                request["reasoning_format"] = reasoningFormat;
+
+            if (includeReasoning.HasValue)
+                request["include_reasoning"] = includeReasoning.Value;
+
+            if (temperature.HasValue)
+                request["temperature"] = temperature.Value;
+
+            if (maxCompletionTokens.HasValue)
+                request["max_completion_tokens"] = maxCompletionTokens.Value;
+
+            return await CreateChatCompletionAsync(request);
+        }
+
+        /// <summary>
+        /// Creates a chat completion with document context (for RAG-style applications).
+        /// </summary>
+        public async Task<JsonObject?> CreateChatCompletionWithDocumentsAsync(
+            JsonArray messages,
+            string model,
+            JsonArray documents,
+            bool enableCitations = true,
+            float? temperature = null,
+            int? maxCompletionTokens = null)
+        {
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                ["messages"] = messages,
+                ["documents"] = documents,
+                ["citation_options"] = enableCitations ? "enabled" : "disabled"
+            };
+
+            if (temperature.HasValue)
+                request["temperature"] = temperature.Value;
+
+            if (maxCompletionTokens.HasValue)
+                request["max_completion_tokens"] = maxCompletionTokens.Value;
+
+            return await CreateChatCompletionAsync(request);
+        }
+
+        /// <summary>
+        /// Creates a chat completion using Compound systems (groq/compound or groq/compound-mini)
+        /// with built-in web search and code execution capabilities.
+        /// </summary>
+        public async Task<JsonObject?> CreateCompoundCompletionAsync(
+            JsonArray messages,
+            bool useMini = false,
+            SearchSettings? searchSettings = null,
+            float? temperature = null,
+            int? maxCompletionTokens = null)
+        {
+            var request = new JsonObject
+            {
+                ["model"] = useMini ? "groq/compound-mini" : "groq/compound",
+                ["messages"] = messages
+            };
+
+            if (searchSettings != null)
+            {
+                var settings = new JsonObject();
+                if (searchSettings.IncludeDomains?.Length > 0)
+                    settings["include_domains"] = JsonSerializer.SerializeToNode(searchSettings.IncludeDomains);
+                if (searchSettings.ExcludeDomains?.Length > 0)
+                    settings["exclude_domains"] = JsonSerializer.SerializeToNode(searchSettings.ExcludeDomains);
+                request["search_settings"] = settings;
+            }
+
+            if (temperature.HasValue)
+                request["temperature"] = temperature.Value;
+
+            if (maxCompletionTokens.HasValue)
+                request["max_completion_tokens"] = maxCompletionTokens.Value;
+
+            return await CreateChatCompletionAsync(request);
+        }
+
+        #endregion
+
+        #region Audio Transcription & Translation
 
         public async Task<JsonObject?> CreateTranscriptionAsync(Stream audioFile, string fileName, string model,
             string? prompt = null, string responseFormat = "json", string? language = null, float? temperature = null)
@@ -122,6 +290,91 @@ namespace GroqApiLibrary
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
+        #endregion
+
+        #region Text-to-Speech
+
+        /// <summary>
+        /// Converts text to speech audio using Orpheus TTS models.
+        /// </summary>
+        /// <param name="text">The text to convert to speech. Supports vocal directions in brackets like [cheerful], [sad], etc.</param>
+        /// <param name="voice">Voice to use. For English: tara, leah, jess, leo, dan, mia, zac, zoe. For Arabic: abdullah, amira.</param>
+        /// <param name="model">TTS model: canopylabs/orpheus-v1-english or canopylabs/orpheus-arabic-saudi</param>
+        /// <param name="responseFormat">Audio format: wav (default), mp3, opus, flac</param>
+        /// <returns>Audio bytes</returns>
+        public async Task<byte[]> CreateSpeechAsync(
+            string text,
+            string voice,
+            string model = "canopylabs/orpheus-v1-english",
+            string responseFormat = "wav")
+        {
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                ["input"] = text,
+                ["voice"] = voice,
+                ["response_format"] = responseFormat
+            };
+
+            var content = new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(BaseUrl + SpeechEndpoint, content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new HttpRequestException($"TTS request failed with status code {response.StatusCode}. Response content: {errorContent}");
+            }
+
+            return await response.Content.ReadAsByteArrayAsync();
+        }
+
+        /// <summary>
+        /// Converts text to speech and saves directly to a file.
+        /// </summary>
+        public async Task CreateSpeechToFileAsync(
+            string text,
+            string voice,
+            string outputPath,
+            string model = "canopylabs/orpheus-v1-english",
+            string responseFormat = "wav")
+        {
+            var audioBytes = await CreateSpeechAsync(text, voice, model, responseFormat);
+            await File.WriteAllBytesAsync(outputPath, audioBytes);
+        }
+
+        /// <summary>
+        /// Converts text to speech and returns as a stream.
+        /// </summary>
+        public async Task<Stream> CreateSpeechStreamAsync(
+            string text,
+            string voice,
+            string model = "canopylabs/orpheus-v1-english",
+            string responseFormat = "wav")
+        {
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                ["input"] = text,
+                ["voice"] = voice,
+                ["response_format"] = responseFormat
+            };
+
+            var content = new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(BaseUrl + SpeechEndpoint, content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new HttpRequestException($"TTS request failed with status code {response.StatusCode}. Response content: {errorContent}");
+            }
+
+            return await response.Content.ReadAsStreamAsync();
+        }
+
+        #endregion
+
+        #region Vision
+
         public async Task<JsonObject?> CreateVisionCompletionAsync(JsonObject request)
         {
             ValidateVisionModel(request);
@@ -131,7 +384,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> CreateVisionCompletionWithImageUrlAsync(
             string imageUrl,
             string prompt,
-            string model = "llama-3.2-90b-vision-preview",
+            string model = "meta-llama/llama-4-scout-17b-16e-instruct",
             float? temperature = null)
         {
             ValidateImageUrl(imageUrl);
@@ -175,12 +428,13 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> CreateVisionCompletionWithBase64ImageAsync(
             string imagePath,
             string prompt,
-            string model = "llama-3.2-90b-vision-preview",
+            string model = "meta-llama/llama-4-scout-17b-16e-instruct",
             float? temperature = null)
         {
             var base64Image = await ConvertImageToBase64(imagePath);
             ValidateBase64Size(base64Image);
 
+            var mimeType = GetMimeType(imagePath);
             var request = new JsonObject
             {
                 ["model"] = model,
@@ -201,7 +455,7 @@ namespace GroqApiLibrary
                                 ["type"] = "image_url",
                                 ["image_url"] = new JsonObject
                                 {
-                                    ["url"] = $"data:image/jpeg;base64,{base64Image}"
+                                    ["url"] = $"data:{mimeType};base64,{base64Image}"
                                 }
                             }
                         }
@@ -221,7 +475,8 @@ namespace GroqApiLibrary
             string imageUrl,
             string prompt,
             List<Tool> tools,
-            string model = "llama-3.2-90b-vision-preview")
+            string model = "meta-llama/llama-4-scout-17b-16e-instruct",
+            bool parallelToolCalls = true)
         {
             ValidateImageUrl(imageUrl);
 
@@ -261,7 +516,8 @@ namespace GroqApiLibrary
                         parameters = t.Function.Parameters
                     }
                 })),
-                ["tool_choice"] = "auto"
+                ["tool_choice"] = "auto",
+                ["parallel_tool_calls"] = parallelToolCalls
             };
 
             return await CreateVisionCompletionAsync(request);
@@ -270,7 +526,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> CreateVisionCompletionWithJsonModeAsync(
             string imageUrl,
             string prompt,
-            string model = "llama-3.2-90b-vision-preview")
+            string model = "meta-llama/llama-4-scout-17b-16e-instruct")
         {
             ValidateImageUrl(imageUrl);
 
@@ -306,6 +562,64 @@ namespace GroqApiLibrary
             return await CreateVisionCompletionAsync(request);
         }
 
+        /// <summary>
+        /// Creates a vision completion with structured JSON output.
+        /// </summary>
+        public async Task<JsonObject?> CreateVisionCompletionWithStructuredOutputAsync(
+            string imageUrl,
+            string prompt,
+            JsonObject jsonSchema,
+            string schemaName = "response",
+            bool strict = false,
+            string model = "meta-llama/llama-4-scout-17b-16e-instruct")
+        {
+            ValidateImageUrl(imageUrl);
+
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                ["messages"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["role"] = "user",
+                        ["content"] = new JsonArray
+                        {
+                            new JsonObject
+                            {
+                                ["type"] = "text",
+                                ["text"] = prompt
+                            },
+                            new JsonObject
+                            {
+                                ["type"] = "image_url",
+                                ["image_url"] = new JsonObject
+                                {
+                                    ["url"] = imageUrl
+                                }
+                            }
+                        }
+                    }
+                },
+                ["response_format"] = new JsonObject
+                {
+                    ["type"] = "json_schema",
+                    ["json_schema"] = new JsonObject
+                    {
+                        ["name"] = schemaName,
+                        ["strict"] = strict,
+                        ["schema"] = jsonSchema
+                    }
+                }
+            };
+
+            return await CreateVisionCompletionAsync(request);
+        }
+
+        #endregion
+
+        #region Models
+
         public async Task<JsonObject?> ListModelsAsync()
         {
             HttpResponseMessage response = await _httpClient.GetAsync($"{BaseUrl}/models");
@@ -317,7 +631,17 @@ namespace GroqApiLibrary
             return responseJson;
         }
 
-        public async Task<string> RunConversationWithToolsAsync(string userPrompt, List<Tool> tools, string model, string systemMessage)
+        #endregion
+
+        #region Tool Use
+
+        public async Task<string> RunConversationWithToolsAsync(
+            string userPrompt, 
+            List<Tool> tools, 
+            string model, 
+            string systemMessage,
+            bool parallelToolCalls = true,
+            string? serviceTier = null)
         {
             try
             {
@@ -349,10 +673,12 @@ namespace GroqApiLibrary
                             parameters = t.Function.Parameters
                         }
                     })),
-                    ["tool_choice"] = "auto"
+                    ["tool_choice"] = "auto",
+                    ["parallel_tool_calls"] = parallelToolCalls
                 };
 
-                Console.WriteLine($"Sending request to API: {JsonSerializer.Serialize(request, new JsonSerializerOptions { WriteIndented = true })}");
+                if (!string.IsNullOrEmpty(serviceTier))
+                    request["service_tier"] = serviceTier;
 
                 var response = await CreateChatCompletionAsync(request);
                 var responseMessage = response?["choices"]?[0]?["message"]?.AsObject();
@@ -360,7 +686,7 @@ namespace GroqApiLibrary
 
                 if (toolCalls != null && toolCalls.Count > 0)
                 {
-                    messages.Add(responseMessage);
+                    messages.Add(responseMessage!);
                     foreach (var toolCall in toolCalls)
                     {
                         var functionName = toolCall?["function"]?["name"]?.GetValue<string>();
@@ -408,12 +734,16 @@ namespace GroqApiLibrary
             }
         }
 
+        #endregion
+
+        #region Validation Helpers
+
         private void ValidateVisionModel(JsonObject request)
         {
             var model = request["model"]?.GetValue<string>();
             if (string.IsNullOrEmpty(model) || !VisionModels.Contains(model))
             {
-                throw new ArgumentException($"Invalid vision model. Must be one of: {VisionModels}");
+                throw new ArgumentException($"Invalid vision model. Must be one of: {string.Join(", ", VisionModels)}");
             }
         }
 
@@ -433,7 +763,20 @@ namespace GroqApiLibrary
                 throw new ArgumentException("Invalid image URL format");
         }
 
+        private static string GetMimeType(string filePath)
+        {
+            var extension = Path.GetExtension(filePath).ToLowerInvariant();
+            return extension switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                _ => "image/jpeg"
+            };
+        }
 
+        #endregion
 
         public void Dispose()
         {
@@ -442,18 +785,139 @@ namespace GroqApiLibrary
         }
     }
 
+    #region Supporting Types
+
+    /// <summary>
+    /// Settings for web search in Compound systems
+    /// </summary>
+    public class SearchSettings
+    {
+        /// <summary>
+        /// Domains to include in search results
+        /// </summary>
+        public string[]? IncludeDomains { get; set; }
+
+        /// <summary>
+        /// Domains to exclude from search results
+        /// </summary>
+        public string[]? ExcludeDomains { get; set; }
+    }
+
+    /// <summary>
+    /// Known model identifiers for convenience
+    /// </summary>
+    public static class GroqModels
+    {
+        // Production chat models
+        public const string Llama31_8B = "llama-3.1-8b-instant";
+        public const string Llama33_70B = "llama-3.3-70b-versatile";
+        
+        // GPT-OSS models (support structured outputs with strict mode)
+        public const string GptOss20B = "openai/gpt-oss-20b";
+        public const string GptOss120B = "openai/gpt-oss-120b";
+        public const string GptOssSafeguard20B = "openai/gpt-oss-safeguard-20b";
+        
+        // Llama 4 multimodal models
+        public const string Llama4Scout = "meta-llama/llama-4-scout-17b-16e-instruct";
+        public const string Llama4Maverick = "meta-llama/llama-4-maverick-17b-128e-instruct";
+        
+        // Qwen (supports reasoning)
+        public const string Qwen3_32B = "qwen/qwen3-32b";
+        
+        // Other models
+        public const string KimiK2 = "moonshotai/kimi-k2-instruct-0905";
+        
+        // Compound systems
+        public const string Compound = "groq/compound";
+        public const string CompoundMini = "groq/compound-mini";
+        
+        // Guard models
+        public const string LlamaGuard4 = "meta-llama/llama-guard-4-12b";
+        public const string PromptGuard22M = "meta-llama/llama-prompt-guard-2-22m";
+        public const string PromptGuard86M = "meta-llama/llama-prompt-guard-2-86m";
+        
+        // Audio models
+        public const string WhisperLargeV3 = "whisper-large-v3";
+        public const string WhisperLargeV3Turbo = "whisper-large-v3-turbo";
+        
+        // TTS models
+        public const string OrpheusEnglish = "canopylabs/orpheus-v1-english";
+        public const string OrpheusArabic = "canopylabs/orpheus-arabic-saudi";
+        
+        // Legacy vision models (still supported)
+        public const string Llama32_90BVision = "llama-3.2-90b-vision-preview";
+        public const string Llama32_11BVision = "llama-3.2-11b-vision-preview";
+    }
+
+    /// <summary>
+    /// Known TTS voices for Orpheus models
+    /// </summary>
+    public static class OrpheusVoices
+    {
+        // English voices (canopylabs/orpheus-v1-english)
+        public const string Tara = "tara";
+        public const string Leah = "leah";
+        public const string Jess = "jess";
+        public const string Leo = "leo";
+        public const string Dan = "dan";
+        public const string Mia = "mia";
+        public const string Zac = "zac";
+        public const string Zoe = "zoe";
+        
+        // Arabic voices (canopylabs/orpheus-arabic-saudi)
+        public const string Abdullah = "abdullah";
+        public const string Amira = "amira";
+    }
+
+    /// <summary>
+    /// Service tier options for controlling request priority
+    /// </summary>
+    public static class ServiceTiers
+    {
+        public const string Auto = "auto";
+        public const string OnDemand = "on_demand";
+        public const string Flex = "flex";
+        public const string Performance = "performance";
+    }
+
+    /// <summary>
+    /// Reasoning effort levels for models that support thinking/reasoning
+    /// </summary>
+    public static class ReasoningEffort
+    {
+        // For Qwen3 models
+        public const string None = "none";
+        public const string Default = "default";
+        
+        // For GPT-OSS models
+        public const string Low = "low";
+        public const string Medium = "medium";
+        public const string High = "high";
+    }
+
+    /// <summary>
+    /// Reasoning format options
+    /// </summary>
+    public static class ReasoningFormat
+    {
+        public const string Hidden = "hidden";
+        public const string Raw = "raw";
+        public const string Parsed = "parsed";
+    }
 
     public class Tool
     {
         public string Type { get; set; } = "function";
-        public Function Function { get; set; }
+        public Function Function { get; set; } = null!;
     }
 
     public class Function
     {
-        public string Name { get; set; }
-        public string Description { get; set; }
-        public JsonObject Parameters { get; set; }
-        public Func<string, Task<string>> ExecuteAsync { get; set; }
+        public string Name { get; set; } = null!;
+        public string Description { get; set; } = null!;
+        public JsonObject Parameters { get; set; } = null!;
+        public Func<string, Task<string>> ExecuteAsync { get; set; } = null!;
     }
+
+    #endregion
 }

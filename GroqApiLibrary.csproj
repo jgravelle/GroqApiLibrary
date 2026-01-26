@@ -7,16 +7,16 @@
 		<Title>Groq API Library</Title>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<Authors>J. Gravelle</Authors>
-		<Description>This library provides a simple interface to interact with the Groq AI API. It allows you to send requests to the API and receive responses asynchronously using .NET 8. Now with Whisper text-to-speech AND tool support!</Description>
-		<Copyright>©2024 - J. Gravelle</Copyright>
+		<Description>Comprehensive C# library for the Groq AI API. Features: Chat completions, streaming, Whisper transcription/translation, Orpheus TTS (text-to-speech), vision/multimodal, tool/function calling, structured outputs (JSON Schema), reasoning models, Compound systems with web search, and more.</Description>
+		<Copyright>©2024-2026 - J. Gravelle</Copyright>
 		<PackageProjectUrl>https://console.groq.com/docs/libraries</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/jgravelle/GroqApiLibrary</RepositoryUrl>
 		<PackageIcon>g_icon.png</PackageIcon>
 		<RepositoryType>git</RepositoryType>
-		<PackageTags>Groq, API, Windows, .NET, Core</PackageTags>
-		<AssemblyVersion>1.0.0.9</AssemblyVersion>
-		<FileVersion>1.0.0.9</FileVersion>
-		<Version>1.0.9</Version>
+		<PackageTags>Groq, API, Windows, .NET, Core, AI, LLM, TTS, Whisper, Vision, Tool-Calling, Structured-Outputs</PackageTags>
+		<AssemblyVersion>2.0.0.0</AssemblyVersion>
+		<FileVersion>2.0.0.0</FileVersion>
+		<Version>2.0.0</Version>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 	</PropertyGroup>
 

@@ -1,28 +1,34 @@
-﻿# Groq API C# Client Library
+# Groq API C# Client Library
 
-Welcome to the Groq API C# Client Library! This powerful and flexible library provides a seamless interface to interact with the cutting-edge Groq AI API. Designed for .NET 8 and above, our library offers a range of features to enhance your AI-powered applications.
+Welcome to the Groq API C# Client Library! This powerful and flexible library provides a comprehensive interface to interact with the Groq AI API. Designed for .NET 8 and above, our library offers a full range of features to enhance your AI-powered applications.
 
 ## 🌟 Features
 
-- 💬 **Chat Completions**: Engage in dynamic conversations with AI models
-- 🔊 **Audio Transcription**: Convert speech to text with high accuracy
+- 💬 **Chat Completions**: Standard and streaming conversations with AI models
+- 🎯 **Structured Outputs**: Guaranteed JSON Schema compliance with strict mode
+- 🧠 **Reasoning Models**: Support for thinking/reasoning with Qwen3 and GPT-OSS
+- 🔊 **Audio Transcription**: Convert speech to text with Whisper
 - 🌐 **Audio Translation**: Translate audio content across languages
-- 🛠️ **Tool Usage**: Extend AI capabilities with custom tools
-- 🌊 **Streaming Support**: Real-time responses for interactive applications
+- 🗣️ **Text-to-Speech**: Generate lifelike audio with Orpheus TTS
+- 👁️ **Vision Analysis**: Process images with Llama 4 multimodal models
+- 🛠️ **Tool/Function Calling**: Extend AI capabilities with custom tools
+- 🔍 **Compound Systems**: Built-in web search and code execution
+- 📄 **Document Context**: RAG-style completions with citations
 - 📋 **Model Listing**: Retrieve available AI models
-- 👁️ **Vision Analysis**: Process and analyze images with multimodal models
 
 ## 📦 Installation
 
-To use this library in your .NET 8+ project:
+### NuGet Package
+```bash
+dotnet add package GroqApiLibrary
+```
 
-1. Clone this repository or download the `GroqApiClient.cs` file.
-2. Add the file to your project.
-3. Ensure your project targets .NET 8 or later.
+### Manual Installation
+1. Clone this repository or download the source files
+2. Add the files to your project
+3. Ensure your project targets .NET 8 or later
 
 ## 🚀 Quick Start
-
-Here's a simple example to get you started:
 
 ```csharp
 using GroqApiLibrary;
@@ -33,7 +39,7 @@ var groqApi = new GroqApiClient(apiKey);
 
 var request = new JsonObject
 {
-    ["model"] = "mixtral-8x7b-32768",
+    ["model"] = GroqModels.Llama33_70B,
     ["messages"] = new JsonArray
     {
         new JsonObject
@@ -57,9 +63,9 @@ Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
 ```csharp
 var request = new JsonObject
 {
-    ["model"] = "mixtral-8x7b-32768",
+    ["model"] = GroqModels.Llama33_70B,
     ["temperature"] = 0.7,
-    ["max_tokens"] = 150,
+    ["max_completion_tokens"] = 150,
     ["messages"] = new JsonArray
     {
         new JsonObject
@@ -84,13 +90,13 @@ Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
 ```csharp
 var request = new JsonObject
 {
-    ["model"] = "mixtral-8x7b-32768",
+    ["model"] = GroqModels.Llama33_70B,
     ["messages"] = new JsonArray
     {
         new JsonObject
         {
             ["role"] = "user",
-            ["content"] = "Explain the concept of quantum entanglement."
+            ["content"] = "Explain quantum entanglement."
         }
     }
 };
@@ -102,45 +108,228 @@ await foreach (var chunk in groqApi.CreateChatCompletionStreamAsync(request))
 }
 ```
 
+### Structured Outputs (JSON Schema)
+
+Guarantee model responses conform to your JSON schema. Use `strict: true` for 100% reliability with GPT-OSS models.
+
+```csharp
+var messages = new JsonArray
+{
+    new JsonObject
+    {
+        ["role"] = "system",
+        ["content"] = "Extract product review information from the text."
+    },
+    new JsonObject
+    {
+        ["role"] = "user",
+        ["content"] = "I bought the UltraSound Headphones and I'm impressed! Great noise cancellation. 4.5 out of 5 stars."
+    }
+};
+
+var schema = new JsonObject
+{
+    ["type"] = "object",
+    ["properties"] = new JsonObject
+    {
+        ["product_name"] = new JsonObject { ["type"] = "string" },
+        ["rating"] = new JsonObject { ["type"] = "number" },
+        ["sentiment"] = new JsonObject 
+        { 
+            ["type"] = "string",
+            ["enum"] = new JsonArray { "positive", "negative", "neutral" }
+        },
+        ["key_features"] = new JsonObject
+        {
+            ["type"] = "array",
+            ["items"] = new JsonObject { ["type"] = "string" }
+        }
+    },
+    ["required"] = new JsonArray { "product_name", "rating", "sentiment", "key_features" },
+    ["additionalProperties"] = false
+};
+
+var result = await groqApi.CreateChatCompletionWithStructuredOutputAsync(
+    messages,
+    GroqModels.GptOss20B,  // Supports strict: true
+    schema,
+    schemaName: "product_review",
+    strict: true
+);
+
+Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
+```
+
+### Reasoning/Thinking Models
+
+Enable reasoning for more thoughtful responses with Qwen3 or GPT-OSS models.
+
+```csharp
+var messages = new JsonArray
+{
+    new JsonObject
+    {
+        ["role"] = "user",
+        ["content"] = "What's 15% of 847? Show your reasoning."
+    }
+};
+
+// For Qwen3: use "none" to disable, "default" to enable
+// For GPT-OSS: use "low", "medium", or "high"
+var result = await groqApi.CreateChatCompletionWithReasoningAsync(
+    messages,
+    GroqModels.GptOss20B,
+    reasoningEffort: ReasoningEffort.Medium,
+    reasoningFormat: ReasoningFormat.Parsed
+);
+
+Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
+```
+
+### Compound Systems (Web Search & Code Execution)
+
+Use Groq's Compound systems for real-time information and code execution without any setup.
+
+```csharp
+var messages = new JsonArray
+{
+    new JsonObject
+    {
+        ["role"] = "user",
+        ["content"] = "What are the top tech news stories today?"
+    }
+};
+
+var result = await groqApi.CreateCompoundCompletionAsync(
+    messages,
+    useMini: false,  // Use groq/compound for multiple tool calls
+    searchSettings: new SearchSettings
+    {
+        IncludeDomains = new[] { "techcrunch.com", "theverge.com", "arstechnica.com" }
+    }
+);
+
+Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
+
+// View which tools were used
+var executedTools = result?["choices"]?[0]?["message"]?["executed_tools"];
+Console.WriteLine($"Tools used: {executedTools}");
+```
+
+### Text-to-Speech (Orpheus TTS)
+
+Generate lifelike audio from text with support for vocal directions.
+
+```csharp
+// Basic TTS
+var audioBytes = await groqApi.CreateSpeechAsync(
+    text: "Welcome to Groq! This is text-to-speech in action.",
+    voice: OrpheusVoices.Tara,
+    model: GroqModels.OrpheusEnglish,
+    responseFormat: "wav"
+);
+await File.WriteAllBytesAsync("output.wav", audioBytes);
+
+// With vocal directions
+var expressiveAudio = await groqApi.CreateSpeechAsync(
+    text: "[cheerful] Great news everyone! [serious] But first, let me explain the details.",
+    voice: OrpheusVoices.Leo,
+    model: GroqModels.OrpheusEnglish
+);
+
+// Save directly to file
+await groqApi.CreateSpeechToFileAsync(
+    text: "This saves directly to a file.",
+    voice: OrpheusVoices.Mia,
+    outputPath: "speech.wav"
+);
+
+// Arabic TTS
+var arabicAudio = await groqApi.CreateSpeechAsync(
+    text: "مرحبا بكم في جروك",
+    voice: OrpheusVoices.Abdullah,
+    model: GroqModels.OrpheusArabic
+);
+```
+
 ### Vision Analysis
 
-#### Basic Image Analysis
+Process and analyze images with Llama 4 multimodal models.
 
 ```csharp
+// Analyze image from URL
 var result = await groqApi.CreateVisionCompletionWithImageUrlAsync(
-    "https://example.com/image.jpg",
-    "What's in this image?",
-    "llama-3.2-90b-vision-preview"
+    imageUrl: "https://example.com/image.jpg",
+    prompt: "What's in this image? Describe it in detail.",
+    model: GroqModels.Llama4Scout
+);
+Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
+
+// Analyze local image
+var localResult = await groqApi.CreateVisionCompletionWithBase64ImageAsync(
+    imagePath: "path/to/local/image.jpg",
+    prompt: "Describe this image",
+    model: GroqModels.Llama4Maverick  // Higher capacity model
 );
 
-Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
+// Vision with structured output
+var schema = new JsonObject
+{
+    ["type"] = "object",
+    ["properties"] = new JsonObject
+    {
+        ["objects"] = new JsonObject
+        {
+            ["type"] = "array",
+            ["items"] = new JsonObject { ["type"] = "string" }
+        },
+        ["scene_type"] = new JsonObject { ["type"] = "string" },
+        ["dominant_colors"] = new JsonObject
+        {
+            ["type"] = "array",
+            ["items"] = new JsonObject { ["type"] = "string" }
+        }
+    },
+    ["required"] = new JsonArray { "objects", "scene_type", "dominant_colors" },
+    ["additionalProperties"] = false
+};
+
+var structuredResult = await groqApi.CreateVisionCompletionWithStructuredOutputAsync(
+    imageUrl: "https://example.com/photo.jpg",
+    prompt: "Analyze this image and extract the requested information.",
+    jsonSchema: schema,
+    schemaName: "image_analysis"
+);
 ```
 
-#### Local Image Analysis
+### Audio Transcription
 
 ```csharp
-var result = await groqApi.CreateVisionCompletionWithBase64ImageAsync(
-    "path/to/local/image.jpg",
-    "Describe this image",
-    "llama-3.2-90b-vision-preview"
+using var audioStream = File.OpenRead("path/to/audio.mp3");
+var result = await groqApi.CreateTranscriptionAsync(
+    audioStream,
+    "audio.mp3",
+    GroqModels.WhisperLargeV3Turbo,  // Faster model
+    prompt: "Transcribe the following tech conference",
+    language: "en"
 );
-
-Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
+Console.WriteLine(result?["text"]?.ToString());
 ```
 
-#### Vision with JSON Mode
+### Audio Translation
 
 ```csharp
-var result = await groqApi.CreateVisionCompletionWithJsonModeAsync(
-    "https://example.com/image.jpg",
-    "List all objects in this image in JSON format",
-    "llama-3.2-90b-vision-preview"
+using var audioStream = File.OpenRead("path/to/french_audio.mp3");
+var result = await groqApi.CreateTranslationAsync(
+    audioStream,
+    "french_audio.mp3",
+    GroqModels.WhisperLargeV3,
+    prompt: "Translate the following French speech to English"
 );
-
-Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
+Console.WriteLine(result?["text"]?.ToString());
 ```
 
-#### Vision with Tools
+### Tool/Function Calling
 
 ```csharp
 var weatherTool = new Tool
@@ -149,7 +338,7 @@ var weatherTool = new Tool
     Function = new Function
     {
         Name = "get_weather",
-        Description = "Get weather information for a location",
+        Description = "Get current weather for a location",
         Parameters = new JsonObject
         {
             ["type"] = "object",
@@ -158,131 +347,74 @@ var weatherTool = new Tool
                 ["location"] = new JsonObject
                 {
                     ["type"] = "string",
-                    ["description"] = "The city and state"
+                    ["description"] = "The city and state, e.g. San Francisco, CA"
                 }
             },
             ["required"] = new JsonArray { "location" }
+        },
+        ExecuteAsync = async (args) =>
+        {
+            var jsonArgs = JsonDocument.Parse(args);
+            var location = jsonArgs.RootElement.GetProperty("location").GetString();
+            // Your weather API call here
+            return JsonSerializer.Serialize(new { temperature = 72, condition = "sunny" });
         }
     }
 };
 
 var tools = new List<Tool> { weatherTool };
-var result = await groqApi.CreateVisionCompletionWithToolsAsync(
-    "https://example.com/cityscape.jpg",
-    "What's the weather like in this city?",
-    tools,
-    "llama-3.2-90b-vision-preview"
+var result = await groqApi.RunConversationWithToolsAsync(
+    userPrompt: "What's the weather like in San Francisco?",
+    tools: tools,
+    model: GroqModels.Llama33_70B,
+    systemMessage: "You are a helpful weather assistant.",
+    parallelToolCalls: true,
+    serviceTier: ServiceTiers.Auto
 );
-
-Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
-```
-
-#### Complex Vision Analysis with VisionAgent
-
-For more complex vision tasks, use the VisionAgent:
-
-```csharp
-var llmProvider = new GroqLlmProvider(apiKey, "llama-3.2-90b-vision-preview");
-var visionAgent = new VisionAgent(llmProvider, "llama-3.2-90b-vision-preview", debug: true);
-
-var result = await visionAgent.ProcessRequestAsync(
-    "Analyze this image and provide historical context: https://example.com/image.jpg"
-);
-
 Console.WriteLine(result);
 ```
 
-### Audio Transcription
+### Document Context (RAG)
 
 ```csharp
-using (var audioStream = File.OpenRead("path/to/your/audio.mp3"))
+var messages = new JsonArray
 {
-    var result = await groqApi.CreateTranscriptionAsync(
-        audioStream,
-        "audio.mp3",
-        "whisper-large-v3",
-        prompt: "Transcribe the following tech conference",
-        language: "en"
-    );
-    Console.WriteLine(result?["text"]?.ToString());
-}
-```
-
-### Audio Translation
-
-```csharp
-using (var audioStream = File.OpenRead("path/to/your/french_audio.mp3"))
-{
-    var result = await groqApi.CreateTranslationAsync(
-        audioStream,
-        "french_audio.mp3",
-        "whisper-large-v3",
-        prompt: "Translate the following French speech to English"
-    );
-    Console.WriteLine(result?["text"]?.ToString());
-}
-```
-
-### Tool Usage
-
-Enhance your AI's capabilities by integrating custom tools. Here's an example using a simple math calculator:
-
-```csharp
-var calculateTool = new Tool
-{
-    Type = "function",
-    Function = new Function
+    new JsonObject
     {
-        Name = "calculate",
-        Description = "Perform a mathematical calculation",
-        Parameters = new JsonObject
-        {
-            ["type"] = "object",
-            ["properties"] = new JsonObject
-            {
-                ["expression"] = new JsonObject
-                {
-                    ["type"] = "string",
-                    ["description"] = "The mathematical expression to evaluate"
-                }
-            },
-            ["required"] = new JsonArray { "expression" }
-        },
-        ExecuteAsync = async (args) =>
-        {
-            var jsonArgs = JsonDocument.Parse(args);
-            var expression = jsonArgs.RootElement.GetProperty("expression").GetString();
-            try
-            {
-                var result = new System.Data.DataTable().Compute(expression, null);
-                return JsonSerializer.Serialize(new { result = result.ToString() });
-            }
-            catch (Exception ex)
-            {
-                return JsonSerializer.Serialize(new { error = $"Error calculating: {ex.Message}" });
-            }
-        }
+        ["role"] = "user",
+        ["content"] = "What are the key points from these documents?"
     }
 };
 
-var tools = new List<Tool> { calculateTool };
-var model = "mixtral-8x7b-32768";
-var systemMessage = "You are an assistant that can perform calculations.";
-var userPrompt = "What is the square root of 144 plus 50?";
+var documents = new JsonArray
+{
+    new JsonObject
+    {
+        ["content"] = "Document 1: Our Q3 revenue increased by 25%...",
+        ["title"] = "Q3 Financial Report"
+    },
+    new JsonObject
+    {
+        ["content"] = "Document 2: Customer satisfaction scores reached 92%...",
+        ["title"] = "Customer Survey Results"
+    }
+};
 
-var result = await groqApi.RunConversationWithToolsAsync(userPrompt, tools, model, systemMessage);
-Console.WriteLine(result);
+var result = await groqApi.CreateChatCompletionWithDocumentsAsync(
+    messages,
+    GroqModels.Llama33_70B,
+    documents,
+    enableCitations: true
+);
+Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
 ```
 
 ### Listing Available Models
 
-To retrieve a list of available AI models:
-
 ```csharp
 var modelsResponse = await groqApi.ListModelsAsync();
-if (modelsResponse != null && modelsResponse.TryGetPropertyValue("data", out var dataNode))
+if (modelsResponse?["data"] is JsonArray models)
 {
-    var models = dataNode.AsArray();
     foreach (var model in models)
     {
         Console.WriteLine(model?["id"]?.GetValue<string>());
@@ -290,32 +422,83 @@ if (modelsResponse != null && modelsResponse.TryGetPropertyValue("data", out var
 }
 ```
 
-## 🎛️ Advanced Configuration
+## 🎛️ Model Reference
 
-### Supported Models
+### Chat Models
+| Constant | Model ID | Notes |
+|----------|----------|-------|
+| `GroqModels.Llama33_70B` | llama-3.3-70b-versatile | Production, 131k context |
+| `GroqModels.Llama31_8B` | llama-3.1-8b-instant | Fast, 131k context |
+| `GroqModels.GptOss20B` | openai/gpt-oss-20b | Structured outputs (strict) |
+| `GroqModels.GptOss120B` | openai/gpt-oss-120b | Structured outputs (strict) |
+| `GroqModels.Qwen3_32B` | qwen/qwen3-32b | Reasoning support |
+| `GroqModels.KimiK2` | moonshotai/kimi-k2-instruct-0905 | 262k context |
 
-Our library supports a wide range of Groq models, including:
+### Vision/Multimodal Models
+| Constant | Model ID | Notes |
+|----------|----------|-------|
+| `GroqModels.Llama4Scout` | meta-llama/llama-4-scout-17b-16e-instruct | Efficient, 131k context |
+| `GroqModels.Llama4Maverick` | meta-llama/llama-4-maverick-17b-128e-instruct | High capacity |
 
-- mixtral-8x7b-32768
-- llama3-70b-8192
-- llama3-8b-8192
-- gemma-7b-it
+### Compound Systems
+| Constant | Model ID | Notes |
+|----------|----------|-------|
+| `GroqModels.Compound` | groq/compound | Multi-tool, web search + code |
+| `GroqModels.CompoundMini` | groq/compound-mini | Single tool, 3x faster |
 
-### Supported Vision Models
+### Audio Models
+| Constant | Model ID | Notes |
+|----------|----------|-------|
+| `GroqModels.WhisperLargeV3` | whisper-large-v3 | High accuracy |
+| `GroqModels.WhisperLargeV3Turbo` | whisper-large-v3-turbo | Faster |
+| `GroqModels.OrpheusEnglish` | canopylabs/orpheus-v1-english | TTS |
+| `GroqModels.OrpheusArabic` | canopylabs/orpheus-arabic-saudi | TTS |
 
-The library supports the following vision models:
-- llama-3.2-90b-vision-preview: High-capacity vision model
-- llama-3.2-11b-vision-preview: Efficient vision model
+### Guard Models
+| Constant | Model ID | Notes |
+|----------|----------|-------|
+| `GroqModels.LlamaGuard4` | meta-llama/llama-guard-4-12b | Content safety |
+| `GroqModels.PromptGuard22M` | meta-llama/llama-prompt-guard-2-22m | Prompt injection |
+| `GroqModels.PromptGuard86M` | meta-llama/llama-prompt-guard-2-86m | Prompt injection |
 
-### Error Handling
+## 🗣️ TTS Voice Reference
 
-The library uses exception handling to manage errors. Always wrap your API calls in try-catch blocks for robust error management:
+### English Voices (OrpheusVoices)
+- `Tara`, `Leah`, `Jess`, `Mia`, `Zoe` (female)
+- `Leo`, `Dan`, `Zac` (male)
+
+### Arabic Voices
+- `Abdullah` (male), `Amira` (female)
+
+### Vocal Directions
+Add emotion/style in brackets: `[cheerful]`, `[sad]`, `[serious]`, `[excited]`, `[whisper]`
+
+## ⚙️ Advanced Configuration
+
+### Custom Headers (e.g., Compound versioning)
+
+```csharp
+groqApi.SetCustomHeader("Groq-Model-Version", "latest");
+```
+
+### Service Tiers
+
+```csharp
+// Available tiers: auto, on_demand, flex, performance
+var request = new JsonObject
+{
+    ["model"] = GroqModels.Llama33_70B,
+    ["service_tier"] = ServiceTiers.Performance,
+    // ...
+};
+```
+
+## 🛡️ Error Handling
 
 ```csharp
 try
 {
     var result = await groqApi.CreateChatCompletionAsync(request);
-    // Process result
 }
 catch (HttpRequestException e)
 {
@@ -323,19 +506,27 @@ catch (HttpRequestException e)
 }
 catch (JsonException e)
 {
-    Console.WriteLine($"Failed to parse API response: {e.Message}");
+    Console.WriteLine($"Failed to parse response: {e.Message}");
 }
 ```
 
+## 🔄 Migration from v1.x
+
+v2.0 is backwards compatible. Existing code will continue to work. New features are additive.
+
+**Notable changes:**
+- Default vision model changed from `llama-3.2-90b-vision-preview` to `meta-llama/llama-4-scout-17b-16e-instruct`
+- `max_tokens` deprecated in favor of `max_completion_tokens`
+- Added `GroqModels`, `OrpheusVoices`, `ServiceTiers`, `ReasoningEffort`, `ReasoningFormat` static classes for convenience
+
 ## 🛠️ Contributing
 
-We welcome contributions to the Groq API C# Client Library! If you have suggestions for improvements or bug fixes, please:
-
+We welcome contributions! Please:
 1. Fork the repository
-2. Create a new branch for your feature
+2. Create a feature branch
 3. Commit your changes
 4. Push to the branch
-5. Create a new Pull Request
+5. Create a Pull Request
 
 ## 📄 License
 
@@ -344,9 +535,9 @@ Mention J. Gravelle if you use this code. He's sort of full of himself.
 
 ## 🙏 Acknowledgements
 
-- Special thanks to the Groq team for their incredible AI models and API.
-- Shoutout to all contributors who have helped improve this library.
+- Special thanks to the Groq team for their incredible AI models and API
+- Shoutout to all contributors who have helped improve this library
 
 ---
 
-We hope you enjoy using the Groq API C# Client Library! If you have any questions or need further assistance, please open an issue in this repository. Happy coding! 🚀
+Happy coding! 🚀
