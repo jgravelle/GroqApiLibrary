@@ -590,6 +590,9 @@ v2.0 is backwards compatible. Existing code will continue to work. New features 
 - `max_tokens` deprecated in favor of `max_completion_tokens`
 - Added `GroqModels`, `OrpheusVoices`, `ServiceTiers`, `ReasoningEffort`, `ReasoningFormat` static classes for convenience
 
+### v2.1.1 (2026-07)
+- **Fix:** audio transcription/translation now format the `temperature` value with `InvariantCulture`, so requests no longer send `0,5` (and get rejected) on comma-decimal locales.
+
 ### v2.1 (2026-07)
 - **Model catalog refreshed** to Groq's current lineup. Decommissioned/deprecated IDs (Kimi K2, Llama 4 Scout/Maverick, Qwen3-32B, Llama 3.2 vision) are now marked `[Obsolete]`.
 - **Default vision model is now `qwen/qwen3.6-27b`** (the Llama 4 vision models are deprecated; `gpt-oss-120b` is text-only).
