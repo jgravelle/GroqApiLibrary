@@ -593,6 +593,31 @@ Files API methods are also available directly: `UploadFileAsync`, `ListFilesAsyn
 
 ## ⚙️ Advanced Configuration
 
+### Dependency Injection (ASP.NET Core / Generic Host)
+
+Register `IGroqApiClient` with a factory-managed, pooled `HttpClient` (avoids socket exhaustion) via `AddGroqApiClient`:
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+
+builder.Services.AddGroqApiClient(builder.Configuration["Groq:ApiKey"]!);
+
+// Optional: customize the managed HttpClient (timeout, proxy, etc.)
+builder.Services.AddGroqApiClient(apiKey, http => http.Timeout = TimeSpan.FromSeconds(60));
+```
+
+Then inject `IGroqApiClient` anywhere:
+
+```csharp
+public class MyService(IGroqApiClient groq)
+{
+    public Task<JsonObject?> AskAsync(JsonArray messages) =>
+        groq.CreateChatCompletionAsync(messages, GroqModels.Llama33_70B);
+}
+```
+
+`AddGroqApiClient` returns the `IHttpClientBuilder`, so you can chain resilience/retry handlers or set the handler lifetime.
+
 ### Custom Headers (e.g., Compound versioning)
 
 ```csharp
