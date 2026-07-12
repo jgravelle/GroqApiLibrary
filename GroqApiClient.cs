@@ -19,6 +19,7 @@ namespace GroqApiLibrary
         private const string TranscriptionsEndpoint = "/audio/transcriptions";
         private const string TranslationsEndpoint = "/audio/translations";
         private const string SpeechEndpoint = "/audio/speech";
+        private const string FilesEndpoint = "/files";
 
         // Vision-capable models. Verified against console.groq.com/docs/models &amp; /deprecations (2026-07-12).
         // qwen/qwen3.6-27b is the current recommended vision model. The Llama 4 / Llama 3.2 vision
@@ -724,6 +725,92 @@ namespace GroqApiLibrary
             JsonObject? responseJson = JsonSerializer.Deserialize<JsonObject>(responseString);
 
             return responseJson;
+        }
+
+        #endregion
+
+        #region Files
+
+        // The Files and Batch APIs require an eligible Groq plan; on unsupported plans the API
+        // returns 403 with code "not_available_for_plan".
+
+        /// <summary>
+        /// Uploads a file for use with the Batch API. Files must be JSONL and up to 100 MB.
+        /// Requires a Groq plan that includes the Files/Batch API.
+        /// </summary>
+        /// <param name="file">The file content stream.</param>
+        /// <param name="fileName">File name (e.g. "batch_input.jsonl").</param>
+        /// <param name="purpose">Upload purpose. Currently only "batch" is supported.</param>
+        /// <returns>The created file object: id, object, bytes, created_at, filename, purpose.</returns>
+        public async Task<JsonObject?> UploadFileAsync(Stream file, string fileName, string purpose = "batch")
+        {
+            using var content = new MultipartFormDataContent();
+            content.Add(new StreamContent(file), "file", fileName);
+            content.Add(new StringContent(purpose), "purpose");
+
+            var response = await _httpClient.PostAsync(BaseUrl + FilesEndpoint, content);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new HttpRequestException($"File upload failed with status code {response.StatusCode}. Response content: {errorContent}");
+            }
+
+            return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
+        /// <summary>
+        /// Lists the files owned by the account. Returns { object: "list", data: [ ... ] }.
+        /// </summary>
+        public async Task<JsonObject?> ListFilesAsync()
+        {
+            var response = await _httpClient.GetAsync(BaseUrl + FilesEndpoint);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
+        /// <summary>
+        /// Retrieves metadata for a single file.
+        /// </summary>
+        public async Task<JsonObject?> GetFileAsync(string fileId)
+        {
+            var response = await _httpClient.GetAsync($"{BaseUrl}{FilesEndpoint}/{fileId}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
+        /// <summary>
+        /// Downloads the raw content of a file (e.g. batch output JSONL) as bytes.
+        /// </summary>
+        public async Task<byte[]> GetFileContentAsync(string fileId)
+        {
+            var response = await _httpClient.GetAsync($"{BaseUrl}{FilesEndpoint}/{fileId}/content");
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new HttpRequestException($"File content download failed with status code {response.StatusCode}. Response content: {errorContent}");
+            }
+
+            return await response.Content.ReadAsByteArrayAsync();
+        }
+
+        /// <summary>
+        /// Downloads the raw content of a file as a stream (e.g. for large batch outputs).
+        /// </summary>
+        public async Task<Stream> GetFileContentStreamAsync(string fileId)
+        {
+            var response = await _httpClient.GetAsync($"{BaseUrl}{FilesEndpoint}/{fileId}/content", HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStreamAsync();
+        }
+
+        /// <summary>
+        /// Deletes a file. Returns { id, object, deleted }.
+        /// </summary>
+        public async Task<JsonObject?> DeleteFileAsync(string fileId)
+        {
+            var response = await _httpClient.DeleteAsync($"{BaseUrl}{FilesEndpoint}/{fileId}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
         #endregion
