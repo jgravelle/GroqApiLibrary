@@ -75,8 +75,36 @@ namespace GroqApiLibrary
 
         #region Chat Completions
 
+        /// <summary>
+        /// Groq does not support Structured Outputs (response_format: json_schema) together with
+        /// streaming or tool use. Callers previously only found out via an API error; this catches
+        /// it client-side with a clearer message. Verified against console.groq.com/docs/structured-outputs
+        /// (2026-07-12): "Streaming and tool use are not currently supported with Structured Outputs."
+        /// </summary>
+        private static void ValidateStructuredOutputCompatibility(JsonObject request, bool streaming)
+        {
+            var responseFormat = request["response_format"] as JsonObject;
+            if (responseFormat?["type"]?.GetValue<string>() != "json_schema")
+                return;
+
+            var isStreaming = streaming || (request["stream"]?.GetValue<bool>() ?? false);
+            var hasTools = request["tools"] is JsonArray { Count: > 0 };
+
+            if (!isStreaming && !hasTools)
+                return;
+
+            var reasons = new List<string>();
+            if (isStreaming) reasons.Add("streaming");
+            if (hasTools) reasons.Add("tool use");
+            throw new ArgumentException(
+                $"Groq does not support Structured Outputs (response_format: json_schema) combined with {string.Join(" or ", reasons)}. " +
+                "Remove response_format, or drop streaming/tools for this request.");
+        }
+
         public async Task<JsonObject?> CreateChatCompletionAsync(JsonObject request)
         {
+            ValidateStructuredOutputCompatibility(request, streaming: false);
+
             var response = await _httpClient.PostAsJsonAsync(BaseUrl + ChatCompletionsEndpoint, request);
 
             if (!response.IsSuccessStatusCode)
@@ -102,6 +130,8 @@ namespace GroqApiLibrary
 
         public async IAsyncEnumerable<JsonObject?> CreateChatCompletionStreamAsync(JsonObject request)
         {
+            ValidateStructuredOutputCompatibility(request, streaming: true);
+
             request["stream"] = true;
             var content = new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json");
             using var requestMessage = new HttpRequestMessage(HttpMethod.Post, BaseUrl + ChatCompletionsEndpoint) { Content = content };
