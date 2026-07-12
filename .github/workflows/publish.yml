@@ -18,10 +18,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.0.x
 
@@ -35,7 +35,7 @@ jobs:
         run: dotnet pack GroqApiLibrary.csproj -c Release --no-build -o ${{ github.workspace }}/artifacts
 
       - name: NuGet login (Trusted Publishing)
-        uses: NuGet/login@v1
+        uses: NuGet/login@v1.2.0
         id: login
         with:
           user: JGravelle   # NuGet.org username
