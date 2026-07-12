@@ -636,6 +636,12 @@ v2.0 is backwards compatible. Existing code will continue to work. New features 
 - `max_tokens` deprecated in favor of `max_completion_tokens`
 - Added `GroqModels`, `OrpheusVoices`, `ServiceTiers`, `ReasoningEffort`, `ReasoningFormat` static classes for convenience
 
+### v2.2 (2026-07)
+- **Files API** — `UploadFileAsync`, `ListFilesAsync`, `GetFileAsync`, `GetFileContentAsync`/`GetFileContentStreamAsync`, `DeleteFileAsync`.
+- **Batch API** — `CreateBatchAsync`/`GetBatchAsync`/`ListBatchesAsync`/`CancelBatchAsync`, plus `BatchRequestBuilder`, `BatchJsonl.ParseOutput`, and the typed `GroqBatch`. (Files/Batch require an eligible Groq plan.)
+- **Streaming with options + usage** — `CreateChatCompletionStreamAsync(messages, model, options)`; set `StreamIncludeUsage` to receive usage in the final chunk.
+- Added `GroqModels.Allam2_7B`.
+
 ### v2.1.1 (2026-07)
 - **Fix:** audio transcription/translation now format the `temperature` value with `InvariantCulture`, so requests no longer send `0,5` (and get rejected) on comma-decimal locales.
 
