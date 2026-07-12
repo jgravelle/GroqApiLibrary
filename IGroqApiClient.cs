@@ -245,6 +245,31 @@ namespace GroqApiLibrary
 
         #endregion
 
+        #region Batch
+
+        /// <summary>
+        /// Creates a batch job over an uploaded JSONL input file. Endpoint values are in <see cref="BatchEndpoints"/>.
+        /// </summary>
+        Task<JsonObject?> CreateBatchAsync(string inputFileId, string endpoint,
+            string completionWindow = "24h", JsonObject? metadata = null);
+
+        /// <summary>
+        /// Retrieves a batch by id (parse with <see cref="GroqBatch.FromResponse"/>).
+        /// </summary>
+        Task<JsonObject?> GetBatchAsync(string batchId);
+
+        /// <summary>
+        /// Lists batch jobs.
+        /// </summary>
+        Task<JsonObject?> ListBatchesAsync();
+
+        /// <summary>
+        /// Requests cancellation of an in-progress batch.
+        /// </summary>
+        Task<JsonObject?> CancelBatchAsync(string batchId);
+
+        #endregion
+
         #region Tool Use
 
         /// <summary>

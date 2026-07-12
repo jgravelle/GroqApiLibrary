@@ -545,6 +545,51 @@ pack the relevant code under a token budget **upstream** — before the prompt r
 typically saves far more than compressing the assembled prompt. That is complementary to, not a
 replacement for, the `IPromptCompressor` seam above.
 
+## 📦 Files & Batch Processing (v2.2)
+
+Run large jobs asynchronously at a 50% discount. Build a JSONL input with `BatchRequestBuilder`,
+upload it via the Files API, create a batch, poll until terminal, then download and parse the output.
+
+> ⚠️ The Files and Batch APIs require an eligible Groq plan. On unsupported plans the API returns
+> `403 not_available_for_plan`.
+
+```csharp
+// 1) Build JSONL input (one line per request; custom_id correlates results)
+var builder = new BatchRequestBuilder(BatchEndpoints.ChatCompletions)
+    .Add("req-1", new JsonObject {
+        ["model"] = GroqModels.GptOss20B,
+        ["messages"] = new JsonArray { new JsonObject { ["role"]="user", ["content"]="Summarize X" } }
+    })
+    .Add("req-2", new JsonObject {
+        ["model"] = GroqModels.GptOss20B,
+        ["messages"] = new JsonArray { new JsonObject { ["role"]="user", ["content"]="Summarize Y" } }
+    });
+
+// 2) Upload + create the batch
+var file  = await groqApi.UploadFileAsync(builder.BuildStream(), "batch_input.jsonl");
+var batch = GroqBatch.FromResponse(
+    await groqApi.CreateBatchAsync(file!["id"]!.GetValue<string>(), BatchEndpoints.ChatCompletions, "24h"));
+
+// 3) Poll until terminal
+while (!batch!.IsTerminal)
+{
+    await Task.Delay(TimeSpan.FromSeconds(30));
+    batch = GroqBatch.FromResponse(await groqApi.GetBatchAsync(batch.Id!));
+}
+
+// 4) Download + parse results
+if (batch.IsCompleted)
+{
+    var bytes   = await groqApi.GetFileContentAsync(batch.OutputFileId!);
+    var results = BatchJsonl.ParseOutput(bytes);   // List<BatchOutputLine>
+    foreach (var r in results)
+        Console.WriteLine($"{r.CustomId}: {(r.IsSuccess ? r.Body?["choices"]?[0]?["message"]?["content"] : r.Error)}");
+}
+```
+
+Files API methods are also available directly: `UploadFileAsync`, `ListFilesAsync`, `GetFileAsync`,
+`GetFileContentAsync` / `GetFileContentStreamAsync`, `DeleteFileAsync`.
+
 ## ⚙️ Advanced Configuration
 
 ### Custom Headers (e.g., Compound versioning)
