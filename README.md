@@ -160,6 +160,8 @@ var result = await groqApi.CreateChatCompletionWithStructuredOutputAsync(
 Console.WriteLine(result?["choices"]?[0]?["message"]?["content"]?.ToString());
 ```
 
+> **Note:** Groq does not support Structured Outputs (`response_format` of type `json_schema`) together with **streaming** or **tool use**. The client guards against this: a request combining `json_schema` with `stream` or `tools` throws an `ArgumentException` up front (rather than failing server-side). If you need those features, use JSON object mode (`response_format` type `json_object`) instead.
+
 ### Reasoning/Thinking Models
 
 Enable reasoning for more thoughtful responses with Qwen3 or GPT-OSS models.
