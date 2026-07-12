@@ -432,6 +432,7 @@ if (modelsResponse?["data"] is JsonArray models)
 | `GroqModels.GptOss120B` | openai/gpt-oss-120b | **Recommended default.** Reasoning + built-in tools, structured outputs (strict). Text-only. |
 | `GroqModels.GptOss20B` | openai/gpt-oss-20b | Faster. Structured outputs (strict). |
 | `GroqModels.Qwen36_27B` | qwen/qwen3.6-27b | Reasoning + **vision**, 131k context |
+| `GroqModels.Allam2_7B` | allam-2-7b | Arabic-focused language model |
 
 ### Vision/Multimodal Models
 | Constant | Model ID | Notes |
