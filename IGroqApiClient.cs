@@ -211,6 +211,40 @@ namespace GroqApiLibrary
 
         #endregion
 
+        #region Files
+
+        /// <summary>
+        /// Uploads a file (JSONL, up to 100 MB) for use with the Batch API.
+        /// </summary>
+        Task<JsonObject?> UploadFileAsync(Stream file, string fileName, string purpose = "batch");
+
+        /// <summary>
+        /// Lists the files owned by the account.
+        /// </summary>
+        Task<JsonObject?> ListFilesAsync();
+
+        /// <summary>
+        /// Retrieves metadata for a single file.
+        /// </summary>
+        Task<JsonObject?> GetFileAsync(string fileId);
+
+        /// <summary>
+        /// Downloads the raw content of a file as bytes.
+        /// </summary>
+        Task<byte[]> GetFileContentAsync(string fileId);
+
+        /// <summary>
+        /// Downloads the raw content of a file as a stream.
+        /// </summary>
+        Task<Stream> GetFileContentStreamAsync(string fileId);
+
+        /// <summary>
+        /// Deletes a file.
+        /// </summary>
+        Task<JsonObject?> DeleteFileAsync(string fileId);
+
+        #endregion
+
         #region Tool Use
 
         /// <summary>
