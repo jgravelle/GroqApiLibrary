@@ -604,6 +604,28 @@ We welcome contributions! Please:
 4. Push to the branch
 5. Create a Pull Request
 
+## 🚀 Releasing (maintainers)
+
+Publishing to NuGet is automated via **Trusted Publishing** (OIDC — no stored API key). The
+`.github/workflows/publish.yml` workflow runs when a **GitHub Release is published**, or manually via
+the Actions tab (`workflow_dispatch`).
+
+> ⚠️ The published version comes from `<Version>` in `GroqApiLibrary.csproj`, **not** from the release
+> tag name. Always bump the version *before* creating the release — otherwise the workflow re-packs the
+> existing version and `--skip-duplicate` makes the push a harmless no-op (nothing gets published).
+
+**To cut a release:**
+1. Bump `<Version>`, `<AssemblyVersion>`, and `<FileVersion>` in `GroqApiLibrary.csproj` (e.g. `2.1.0` → `2.2.0`) and commit to `master`.
+2. Create a GitHub Release with a tag that matches the version (e.g. `v2.2.0`):
+   ```bash
+   gh release create v2.2.0 --target master --title "v2.2.0" --notes "…release notes…"
+   ```
+3. The workflow packs and pushes automatically. Watch it with `gh run watch` and confirm the package
+   appears at `nuget.org/packages/GroqApiLibrary`.
+
+**Does not** trigger a publish: a plain `git push`, pushing a tag on its own, or a *draft* release —
+only a **published** Release (or a manual run) does.
+
 ## 📄 License
 
 This library is licensed under the MIT License.
