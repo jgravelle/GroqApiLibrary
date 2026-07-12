@@ -25,8 +25,14 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Restore
+        run: dotnet restore GroqApiLibrary.csproj
+
+      - name: Build
+        run: dotnet build GroqApiLibrary.csproj -c Release --no-restore
+
       - name: Pack
-        run: dotnet pack GroqApiLibrary.csproj -c Release -o ${{ github.workspace }}/artifacts
+        run: dotnet pack GroqApiLibrary.csproj -c Release --no-build -o ${{ github.workspace }}/artifacts
 
       - name: NuGet login (Trusted Publishing)
         uses: NuGet/login@v1
