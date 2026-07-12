@@ -20,6 +20,7 @@ namespace GroqApiLibrary
         private const string TranslationsEndpoint = "/audio/translations";
         private const string SpeechEndpoint = "/audio/speech";
         private const string FilesEndpoint = "/files";
+        private const string BatchesEndpoint = "/batches";
 
         // Vision-capable models. Verified against console.groq.com/docs/models &amp; /deprecations (2026-07-12).
         // qwen/qwen3.6-27b is the current recommended vision model. The Llama 4 / Llama 3.2 vision
@@ -810,6 +811,78 @@ namespace GroqApiLibrary
         {
             var response = await _httpClient.DeleteAsync($"{BaseUrl}{FilesEndpoint}/{fileId}");
             response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
+        #endregion
+
+        #region Batch
+
+        // Like Files, the Batch API requires an eligible Groq plan (else 403 not_available_for_plan).
+        // Batches run asynchronously (50% discount) and have their own rate limits; they do not
+        // accept a service_tier. See BatchRequestBuilder / BatchJsonl / GroqBatch for helpers.
+
+        /// <summary>
+        /// Creates a batch job that processes an uploaded JSONL input file asynchronously.
+        /// </summary>
+        /// <param name="inputFileId">Id of an uploaded file (see <see cref="UploadFileAsync"/>).</param>
+        /// <param name="endpoint">Target endpoint for every line, e.g. <see cref="BatchEndpoints.ChatCompletions"/>.</param>
+        /// <param name="completionWindow">Processing window from "24h" to "7d".</param>
+        /// <param name="metadata">Optional caller metadata echoed back on the batch object.</param>
+        public async Task<JsonObject?> CreateBatchAsync(string inputFileId, string endpoint,
+            string completionWindow = "24h", JsonObject? metadata = null)
+        {
+            var request = new JsonObject
+            {
+                ["input_file_id"] = inputFileId,
+                ["endpoint"] = endpoint,
+                ["completion_window"] = completionWindow
+            };
+            if (metadata is not null)
+                request["metadata"] = JsonNode.Parse(metadata.ToJsonString());
+
+            var response = await _httpClient.PostAsJsonAsync(BaseUrl + BatchesEndpoint, request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new HttpRequestException($"Batch creation failed with status code {response.StatusCode}. Response content: {errorContent}");
+            }
+
+            return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
+        /// <summary>
+        /// Retrieves a batch by id. Parse with <see cref="GroqBatch.FromResponse"/> to poll status.
+        /// </summary>
+        public async Task<JsonObject?> GetBatchAsync(string batchId)
+        {
+            var response = await _httpClient.GetAsync($"{BaseUrl}{BatchesEndpoint}/{batchId}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
+        /// <summary>
+        /// Lists batch jobs. Returns { object: "list", data: [ ... ] }.
+        /// </summary>
+        public async Task<JsonObject?> ListBatchesAsync()
+        {
+            var response = await _httpClient.GetAsync(BaseUrl + BatchesEndpoint);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
+        /// <summary>
+        /// Requests cancellation of an in-progress batch.
+        /// </summary>
+        public async Task<JsonObject?> CancelBatchAsync(string batchId)
+        {
+            var response = await _httpClient.PostAsync($"{BaseUrl}{BatchesEndpoint}/{batchId}/cancel", null);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new HttpRequestException($"Batch cancel failed with status code {response.StatusCode}. Response content: {errorContent}");
+            }
+
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
