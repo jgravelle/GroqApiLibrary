@@ -124,6 +124,18 @@ namespace GroqApiLibrary
         }
 
         /// <summary>
+        /// Streams a chat completion from messages plus optional strongly-typed parameters
+        /// (see <see cref="GroqChatOptions"/>). Set <see cref="GroqChatOptions.StreamIncludeUsage"/> to
+        /// receive a final chunk carrying <c>usage</c> (read it with <see cref="GroqUsage.FromResponse"/>).
+        /// </summary>
+        public IAsyncEnumerable<JsonObject?> CreateChatCompletionStreamAsync(JsonArray messages, string model, GroqChatOptions? options = null)
+        {
+            var request = new JsonObject { ["model"] = model, ["messages"] = messages };
+            options?.ApplyTo(request);
+            return CreateChatCompletionStreamAsync(request);
+        }
+
+        /// <summary>
         /// Creates a chat completion with structured output using JSON Schema.
         /// Supports strict mode for guaranteed schema compliance on supported models (GPT-OSS 20B/120B).
         /// </summary>
@@ -1076,6 +1088,9 @@ namespace GroqApiLibrary
 
         // Qwen 3.6 27B: current recommended reasoning + vision-capable model (131K context).
         public const string Qwen36_27B = "qwen/qwen3.6-27b";
+
+        // Allam 2 7B: Arabic-focused language model.
+        public const string Allam2_7B = "allam-2-7b";
 
         // Compound agentic systems (used via the chat endpoint by setting the model).
         public const string Compound = "groq/compound";

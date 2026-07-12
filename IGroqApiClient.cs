@@ -23,6 +23,12 @@ namespace GroqApiLibrary
         IAsyncEnumerable<JsonObject?> CreateChatCompletionStreamAsync(JsonObject request);
 
         /// <summary>
+        /// Streams a chat completion from messages plus optional parameters (see <see cref="GroqChatOptions"/>).
+        /// Set <see cref="GroqChatOptions.StreamIncludeUsage"/> to receive a final chunk carrying usage.
+        /// </summary>
+        IAsyncEnumerable<JsonObject?> CreateChatCompletionStreamAsync(JsonArray messages, string model, GroqChatOptions? options = null);
+
+        /// <summary>
         /// Creates a chat completion with structured JSON output using JSON Schema.
         /// </summary>
         Task<JsonObject?> CreateChatCompletionWithStructuredOutputAsync(
