@@ -307,7 +307,7 @@ namespace GroqApiLibrary
                 content.Add(new StringContent(language), "language");
 
             if (temperature.HasValue)
-                content.Add(new StringContent(temperature.Value.ToString()), "temperature");
+                content.Add(new StringContent(temperature.Value.ToString(CultureInfo.InvariantCulture)), "temperature");
 
             var response = await _httpClient.PostAsync(BaseUrl + TranscriptionsEndpoint, content);
             response.EnsureSuccessStatusCode();
@@ -327,7 +327,7 @@ namespace GroqApiLibrary
             content.Add(new StringContent(responseFormat), "response_format");
 
             if (temperature.HasValue)
-                content.Add(new StringContent(temperature.Value.ToString()), "temperature");
+                content.Add(new StringContent(temperature.Value.ToString(CultureInfo.InvariantCulture)), "temperature");
 
             var response = await _httpClient.PostAsync(BaseUrl + TranslationsEndpoint, content);
             response.EnsureSuccessStatusCode();
