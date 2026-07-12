@@ -77,6 +77,7 @@ namespace GroqApiLibrary
 
         public async Task<JsonObject?> CreateChatCompletionAsync(JsonObject request)
         {
+            GuardStructuredOutputCompatibility(request, streaming: false);
             var response = await _httpClient.PostAsJsonAsync(BaseUrl + ChatCompletionsEndpoint, request);
 
             if (!response.IsSuccessStatusCode)
@@ -100,7 +101,14 @@ namespace GroqApiLibrary
             return CreateChatCompletionAsync(request);
         }
 
-        public async IAsyncEnumerable<JsonObject?> CreateChatCompletionStreamAsync(JsonObject request)
+        public IAsyncEnumerable<JsonObject?> CreateChatCompletionStreamAsync(JsonObject request)
+        {
+            // Validate eagerly: iterator methods otherwise defer the throw until first enumeration.
+            GuardStructuredOutputCompatibility(request, streaming: true);
+            return CreateChatCompletionStreamCoreAsync(request);
+        }
+
+        private async IAsyncEnumerable<JsonObject?> CreateChatCompletionStreamCoreAsync(JsonObject request)
         {
             request["stream"] = true;
             var content = new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json");
@@ -133,6 +141,39 @@ namespace GroqApiLibrary
             var request = new JsonObject { ["model"] = model, ["messages"] = messages };
             options?.ApplyTo(request);
             return CreateChatCompletionStreamAsync(request);
+        }
+
+        /// <summary>
+        /// Guards against request combinations Groq rejects: Structured Outputs
+        /// (<c>response_format</c> of type <c>json_schema</c>) cannot be combined with streaming
+        /// or with tool use. Throws <see cref="ArgumentException"/> early with a helpful message
+        /// instead of letting the request fail server-side.
+        /// See https://console.groq.com/docs/structured-outputs.
+        /// </summary>
+        private static void GuardStructuredOutputCompatibility(JsonObject request, bool streaming)
+        {
+            if (request["response_format"] is not JsonObject responseFormat)
+                return;
+            if (responseFormat["type"] is not JsonValue typeValue
+                || !typeValue.TryGetValue<string>(out var type)
+                || type != "json_schema")
+                return;
+
+            var isStreaming = streaming
+                || (request["stream"] is JsonValue streamValue
+                    && streamValue.TryGetValue<bool>(out var streamFlag)
+                    && streamFlag);
+            if (isStreaming)
+                throw new ArgumentException(
+                    "Groq does not support Structured Outputs (response_format \"json_schema\") together with streaming. " +
+                    "Use a non-streaming call, or switch to JSON object mode (response_format type \"json_object\").",
+                    nameof(request));
+
+            if (request["tools"] is JsonArray tools && tools.Count > 0)
+                throw new ArgumentException(
+                    "Groq does not support Structured Outputs (response_format \"json_schema\") together with tool use. " +
+                    "Remove the tools, or switch to JSON object mode (response_format type \"json_object\").",
+                    nameof(request));
         }
 
         /// <summary>
