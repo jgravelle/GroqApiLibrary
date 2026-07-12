@@ -424,21 +424,21 @@ if (modelsResponse?["data"] is JsonArray models)
 
 ## 🎛️ Model Reference
 
+> Verified against console.groq.com/docs/models and /deprecations as of 2026-07-12. Deprecated/decommissioned constants are marked `[Obsolete]` in code and are omitted here.
+
 ### Chat Models
 | Constant | Model ID | Notes |
 |----------|----------|-------|
-| `GroqModels.Llama33_70B` | llama-3.3-70b-versatile | Production, 131k context |
-| `GroqModels.Llama31_8B` | llama-3.1-8b-instant | Fast, 131k context |
-| `GroqModels.GptOss20B` | openai/gpt-oss-20b | Structured outputs (strict) |
-| `GroqModels.GptOss120B` | openai/gpt-oss-120b | Structured outputs (strict) |
-| `GroqModels.Qwen3_32B` | qwen/qwen3-32b | Reasoning support |
-| `GroqModels.KimiK2` | moonshotai/kimi-k2-instruct-0905 | 262k context |
+| `GroqModels.GptOss120B` | openai/gpt-oss-120b | **Recommended default.** Reasoning + built-in tools, structured outputs (strict). Text-only. |
+| `GroqModels.GptOss20B` | openai/gpt-oss-20b | Faster. Structured outputs (strict). |
+| `GroqModels.Qwen36_27B` | qwen/qwen3.6-27b | Reasoning + **vision**, 131k context |
 
 ### Vision/Multimodal Models
 | Constant | Model ID | Notes |
 |----------|----------|-------|
-| `GroqModels.Llama4Scout` | meta-llama/llama-4-scout-17b-16e-instruct | Efficient, 131k context |
-| `GroqModels.Llama4Maverick` | meta-llama/llama-4-maverick-17b-128e-instruct | High capacity |
+| `GroqModels.Qwen36_27B` | qwen/qwen3.6-27b | **Recommended vision model.** (`gpt-oss-120b` is text-only.) |
+
+> The former Llama 4 (`Llama4Scout`, `Llama4Maverick`) and Llama 3.2 vision constants are deprecated/decommissioned on GroqCloud. They remain in code as `[Obsolete]` for source compatibility but should not be used.
 
 ### Compound Systems
 | Constant | Model ID | Notes |
@@ -463,15 +463,87 @@ if (modelsResponse?["data"] is JsonArray models)
 
 ## 🗣️ TTS Voice Reference
 
-### English Voices (OrpheusVoices)
-- `Tara`, `Leah`, `Jess`, `Mia`, `Zoe` (female)
-- `Leo`, `Dan`, `Zac` (male)
+### English Voices (OrpheusVoices, `canopylabs/orpheus-v1-english`)
+- `Autumn`, `Diana`, `Hannah`, `Austin`, `Daniel`, `Troy`
 
-### Arabic Voices
-- `Abdullah` (male), `Amira` (female)
+### Arabic Voices (`canopylabs/orpheus-arabic-saudi`)
+- `Abdullah`, `Fahad`, `Sultan`, `Lulwa`, `Noura`, `Aisha`
 
-### Vocal Directions
-Add emotion/style in brackets: `[cheerful]`, `[sad]`, `[serious]`, `[excited]`, `[whisper]`
+### Notes
+- Output format is **WAV only**; input is capped at **200 characters**.
+- English supports vocal directions in brackets: `[cheerful]`, `[whisper]`, `[dramatic]`, `[excited]`
+
+## 🧰 Request Options & Usage Analytics (v2.1)
+
+Pass strongly-typed parameters with `GroqChatOptions` instead of hand-building every field, and read
+token usage / prompt-cache hits / timing from any response with `GroqUsage`:
+
+```csharp
+var messages = new JsonArray
+{
+    new JsonObject { ["role"] = "user", ["content"] = "Explain LPUs in one sentence." }
+};
+
+var response = await groqApi.CreateChatCompletionAsync(messages, GroqModels.GptOss120B, new GroqChatOptions
+{
+    Temperature = 0.2,
+    MaxCompletionTokens = 256,
+    ServiceTier = ServiceTiers.Flex,
+    ReasoningEffort = ReasoningEffort.Low,
+    Seed = 42
+});
+
+var usage = GroqUsage.FromResponse(response);
+if (usage != null)
+    Console.WriteLine($"tokens: {usage.TotalTokens} (cached {usage.CachedTokens}, " +
+                      $"{usage.CacheHitRatio:P0}), {usage.TotalTime}s, id={usage.RequestId}");
+```
+
+Prompt caching is automatic on supported models (e.g. `gpt-oss-120b`); `usage.CachedTokens` shows how
+many input tokens were served from cache (billed at a discount).
+
+## 🎙️ Transcription from a URL (v2.1)
+
+```csharp
+var result = await groqApi.CreateTranscriptionFromUrlAsync(
+    "https://example.com/audio.mp3", GroqModels.WhisperLargeV3Turbo);
+```
+
+## 🧠 Compound: enable specific tools & inspect what ran (v2.1)
+
+```csharp
+var response = await groqApi.CreateCompoundCompletionAsync(
+    messages,
+    enabledTools: new[] { "web_search", "code_interpreter" });
+
+var executed = GroqApiClient.GetExecutedTools(response); // which built-in tools the system ran
+```
+
+## 🌱 Optional Prompt Compression (v2.1)
+
+A "greening"/cost feature: reduce a prompt's token footprint before sending. This is **opt-in lossy
+token reduction** (the model reads the transformed text — there is no reversible decompress), so weigh
+the quality/cost trade-off. When no compressor is supplied, prompts are sent unchanged.
+
+```csharp
+// Zero-cost, near-lossless: collapses redundant whitespace, no network call.
+var provider = new GroqLlmProvider(apiKey, GroqModels.GptOss120B, new WhitespaceCompressor());
+
+// Optional LLM-based compression for LARGE prompts (adds a call; net-negative on small prompts,
+// so it no-ops below MinCharsToCompress):
+var llmCompressor = new LlmSummarizingCompressor(new GroqApiClient(apiKey), GroqModels.GptOss20B);
+var provider2 = new GroqLlmProvider(apiKey, GroqModels.GptOss120B, llmCompressor);
+```
+
+Implement `IPromptCompressor` for a custom strategy. Measure the effect with `GroqUsage.PromptTokens`
+before/after rather than assuming savings.
+
+### Ecosystem note
+If you're building a **coding agent** on top of this library, most of your prompt tokens are usually
+*source code context*, not prose. Tools like [jcodemunch-mcp](https://github.com/jgravelle) can rank and
+pack the relevant code under a token budget **upstream** — before the prompt reaches Groq — which
+typically saves far more than compressing the assembled prompt. That is complementary to, not a
+replacement for, the `IPromptCompressor` seam above.
 
 ## ⚙️ Advanced Configuration
 
@@ -487,7 +559,7 @@ groqApi.SetCustomHeader("Groq-Model-Version", "latest");
 // Available tiers: auto, on_demand, flex, performance
 var request = new JsonObject
 {
-    ["model"] = GroqModels.Llama33_70B,
+    ["model"] = GroqModels.GptOss120B,
     ["service_tier"] = ServiceTiers.Performance,
     // ...
 };
@@ -515,9 +587,13 @@ catch (JsonException e)
 v2.0 is backwards compatible. Existing code will continue to work. New features are additive.
 
 **Notable changes:**
-- Default vision model changed from `llama-3.2-90b-vision-preview` to `meta-llama/llama-4-scout-17b-16e-instruct`
 - `max_tokens` deprecated in favor of `max_completion_tokens`
 - Added `GroqModels`, `OrpheusVoices`, `ServiceTiers`, `ReasoningEffort`, `ReasoningFormat` static classes for convenience
+
+### v2.1 (2026-07)
+- **Model catalog refreshed** to Groq's current lineup. Decommissioned/deprecated IDs (Kimi K2, Llama 4 Scout/Maverick, Qwen3-32B, Llama 3.2 vision) are now marked `[Obsolete]`.
+- **Default vision model is now `qwen/qwen3.6-27b`** (the Llama 4 vision models are deprecated; `gpt-oss-120b` is text-only).
+- **Corrected Orpheus TTS voices** — the previous voice constants were PlayAI names and did not work with Orpheus. Use `autumn/diana/hannah/austin/daniel/troy` (English) and `abdullah/fahad/sultan/lulwa/noura/aisha` (Arabic). Orpheus output is WAV-only.
 
 ## 🛠️ Contributing
 

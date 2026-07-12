@@ -12,6 +12,12 @@ namespace GroqApiLibrary
         Task<JsonObject?> CreateChatCompletionAsync(JsonObject request);
 
         /// <summary>
+        /// Creates a chat completion from messages plus optional strongly-typed request parameters
+        /// (see <see cref="GroqChatOptions"/>). Read usage/analytics with <see cref="GroqUsage.FromResponse"/>.
+        /// </summary>
+        Task<JsonObject?> CreateChatCompletionAsync(JsonArray messages, string model, GroqChatOptions? options = null);
+
+        /// <summary>
         /// Creates a streaming chat completion.
         /// </summary>
         IAsyncEnumerable<JsonObject?> CreateChatCompletionStreamAsync(JsonObject request);
@@ -59,7 +65,8 @@ namespace GroqApiLibrary
             bool useMini = false,
             SearchSettings? searchSettings = null,
             float? temperature = null,
-            int? maxCompletionTokens = null);
+            int? maxCompletionTokens = null,
+            string[]? enabledTools = null);
 
         #endregion
 
@@ -81,11 +88,32 @@ namespace GroqApiLibrary
         /// Translates audio to English text using Whisper models.
         /// </summary>
         Task<JsonObject?> CreateTranslationAsync(
-            Stream audioFile, 
-            string fileName, 
+            Stream audioFile,
+            string fileName,
             string model,
-            string? prompt = null, 
-            string responseFormat = "json", 
+            string? prompt = null,
+            string responseFormat = "json",
+            float? temperature = null);
+
+        /// <summary>
+        /// Transcribes audio from a publicly accessible URL (no upload) using Whisper models.
+        /// </summary>
+        Task<JsonObject?> CreateTranscriptionFromUrlAsync(
+            string url,
+            string model,
+            string? prompt = null,
+            string responseFormat = "json",
+            string? language = null,
+            float? temperature = null);
+
+        /// <summary>
+        /// Translates audio from a publicly accessible URL (no upload) to English using Whisper models.
+        /// </summary>
+        Task<JsonObject?> CreateTranslationFromUrlAsync(
+            string url,
+            string model,
+            string? prompt = null,
+            string responseFormat = "json",
             float? temperature = null);
 
         /// <summary>
@@ -131,7 +159,7 @@ namespace GroqApiLibrary
         Task<JsonObject?> CreateVisionCompletionWithImageUrlAsync(
             string imageUrl,
             string prompt,
-            string model = "meta-llama/llama-4-scout-17b-16e-instruct",
+            string model = "qwen/qwen3.6-27b",
             float? temperature = null);
 
         /// <summary>
@@ -140,7 +168,7 @@ namespace GroqApiLibrary
         Task<JsonObject?> CreateVisionCompletionWithBase64ImageAsync(
             string imagePath,
             string prompt,
-            string model = "meta-llama/llama-4-scout-17b-16e-instruct",
+            string model = "qwen/qwen3.6-27b",
             float? temperature = null);
 
         /// <summary>
@@ -150,7 +178,7 @@ namespace GroqApiLibrary
             string imageUrl,
             string prompt,
             List<Tool> tools,
-            string model = "meta-llama/llama-4-scout-17b-16e-instruct",
+            string model = "qwen/qwen3.6-27b",
             bool parallelToolCalls = true);
 
         /// <summary>
@@ -159,7 +187,7 @@ namespace GroqApiLibrary
         Task<JsonObject?> CreateVisionCompletionWithJsonModeAsync(
             string imageUrl,
             string prompt,
-            string model = "meta-llama/llama-4-scout-17b-16e-instruct");
+            string model = "qwen/qwen3.6-27b");
 
         /// <summary>
         /// Creates a vision completion with structured JSON output.
@@ -170,7 +198,7 @@ namespace GroqApiLibrary
             JsonObject jsonSchema,
             string schemaName = "response",
             bool strict = false,
-            string model = "meta-llama/llama-4-scout-17b-16e-instruct");
+            string model = "qwen/qwen3.6-27b");
 
         #endregion
 
