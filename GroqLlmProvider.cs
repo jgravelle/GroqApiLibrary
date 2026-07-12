@@ -18,21 +18,28 @@ namespace GroqApiLibrary
     {
         private readonly GroqApiClient _client;
         private readonly string _model;
+        private readonly IPromptCompressor? _compressor;
 
-        public GroqLlmProvider(string apiKey, string model)
+        public GroqLlmProvider(string apiKey, string model, IPromptCompressor? compressor = null)
         {
             _client = new GroqApiClient(apiKey);
             _model = model;
+            _compressor = compressor;
         }
 
-        public GroqLlmProvider(string apiKey, string model, HttpClient httpClient)
+        public GroqLlmProvider(string apiKey, string model, HttpClient httpClient, IPromptCompressor? compressor = null)
         {
             _client = new GroqApiClient(apiKey, httpClient);
             _model = model;
+            _compressor = compressor;
         }
 
         public async Task<string> GenerateAsync(string prompt)
         {
+            // Opt-in prompt compression: when no compressor was supplied, the prompt is sent unchanged.
+            if (_compressor != null)
+                prompt = await _compressor.CompressAsync(prompt);
+
             var request = new JsonObject
             {
                 ["model"] = _model,

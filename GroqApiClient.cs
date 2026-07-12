@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -19,13 +20,18 @@ namespace GroqApiLibrary
         private const string TranslationsEndpoint = "/audio/translations";
         private const string SpeechEndpoint = "/audio/speech";
 
-        // Updated vision models to include Llama 4 multimodal models
+        // Vision-capable models. Verified against console.groq.com/docs/models &amp; /deprecations (2026-07-12).
+        // qwen/qwen3.6-27b is the current recommended vision model. The Llama 4 / Llama 3.2 vision
+        // models are deprecated (Maverick decommissioned 2026-03-09, Scout shuts down 2026-07-17,
+        // Llama 3.2 vision long gone) but are retained here so existing callers still pass validation
+        // during the transition. Note: openai/gpt-oss-120b is text-only and is intentionally NOT listed.
         private static readonly HashSet<string> VisionModels = new(StringComparer.OrdinalIgnoreCase)
         {
-            "llama-3.2-90b-vision-preview",
-            "llama-3.2-11b-vision-preview",
+            "qwen/qwen3.6-27b",
             "meta-llama/llama-4-scout-17b-16e-instruct",
-            "meta-llama/llama-4-maverick-17b-128e-instruct"
+            "meta-llama/llama-4-maverick-17b-128e-instruct",
+            "llama-3.2-90b-vision-preview",
+            "llama-3.2-11b-vision-preview"
         };
 
         private const int MAX_IMAGE_SIZE_MB = 20;
@@ -78,6 +84,18 @@ namespace GroqApiLibrary
             }
 
             return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
+        /// <summary>
+        /// Creates a chat completion from messages plus optional strongly-typed request parameters
+        /// (see <see cref="GroqChatOptions"/>). Read token usage/analytics from the response with
+        /// <see cref="GroqUsage.FromResponse"/>.
+        /// </summary>
+        public Task<JsonObject?> CreateChatCompletionAsync(JsonArray messages, string model, GroqChatOptions? options = null)
+        {
+            var request = new JsonObject { ["model"] = model, ["messages"] = messages };
+            options?.ApplyTo(request);
+            return CreateChatCompletionAsync(request);
         }
 
         public async IAsyncEnumerable<JsonObject?> CreateChatCompletionStreamAsync(JsonObject request)
@@ -209,14 +227,23 @@ namespace GroqApiLibrary
 
         /// <summary>
         /// Creates a chat completion using Compound systems (groq/compound or groq/compound-mini)
-        /// with built-in web search and code execution capabilities.
+        /// with built-in server-side tools (web search, code execution, visit website, Wolfram Alpha).
+        /// The response includes an <c>executed_tools</c> array (which tools ran) and a
+        /// <c>usage_breakdown</c> object (per-underlying-model tokens); use
+        /// <see cref="GetExecutedTools"/> to read the former.
         /// </summary>
+        /// <param name="enabledTools">
+        /// Optional allow-list of built-in tools to enable (e.g. "web_search", "code_interpreter",
+        /// "visit_website", "wolfram_alpha"), sent as compound_custom.tools.enabled_tools. When null,
+        /// the system default set is used.
+        /// </param>
         public async Task<JsonObject?> CreateCompoundCompletionAsync(
             JsonArray messages,
             bool useMini = false,
             SearchSettings? searchSettings = null,
             float? temperature = null,
-            int? maxCompletionTokens = null)
+            int? maxCompletionTokens = null,
+            string[]? enabledTools = null)
         {
             var request = new JsonObject
             {
@@ -234,6 +261,16 @@ namespace GroqApiLibrary
                 request["search_settings"] = settings;
             }
 
+            if (enabledTools is { Length: > 0 })
+            {
+                var tools = new JsonArray();
+                foreach (var t in enabledTools) tools.Add(t);
+                request["compound_custom"] = new JsonObject
+                {
+                    ["tools"] = new JsonObject { ["enabled_tools"] = tools }
+                };
+            }
+
             if (temperature.HasValue)
                 request["temperature"] = temperature.Value;
 
@@ -242,6 +279,13 @@ namespace GroqApiLibrary
 
             return await CreateChatCompletionAsync(request);
         }
+
+        /// <summary>
+        /// Returns the <c>executed_tools</c> array from a Compound response (the built-in tools the
+        /// system ran while producing the answer), or null if none is present.
+        /// </summary>
+        public static JsonArray? GetExecutedTools(JsonObject? response)
+            => response?["choices"]?[0]?["message"]?["executed_tools"] as JsonArray;
 
         #endregion
 
@@ -290,6 +334,57 @@ namespace GroqApiLibrary
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
+        /// <summary>
+        /// Transcribes audio from a publicly accessible URL, avoiding an upload. Alternative to the
+        /// multipart <see cref="CreateTranscriptionAsync"/>.
+        /// </summary>
+        public async Task<JsonObject?> CreateTranscriptionFromUrlAsync(string url, string model,
+            string? prompt = null, string responseFormat = "json", string? language = null, float? temperature = null)
+        {
+            using var content = new MultipartFormDataContent();
+            content.Add(new StringContent(url), "url");
+            content.Add(new StringContent(model), "model");
+
+            if (!string.IsNullOrEmpty(prompt))
+                content.Add(new StringContent(prompt), "prompt");
+
+            content.Add(new StringContent(responseFormat), "response_format");
+
+            if (!string.IsNullOrEmpty(language))
+                content.Add(new StringContent(language), "language");
+
+            if (temperature.HasValue)
+                content.Add(new StringContent(temperature.Value.ToString(CultureInfo.InvariantCulture)), "temperature");
+
+            var response = await _httpClient.PostAsync(BaseUrl + TranscriptionsEndpoint, content);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
+        /// <summary>
+        /// Translates audio from a publicly accessible URL to English, avoiding an upload. Alternative
+        /// to the multipart <see cref="CreateTranslationAsync"/>.
+        /// </summary>
+        public async Task<JsonObject?> CreateTranslationFromUrlAsync(string url, string model,
+            string? prompt = null, string responseFormat = "json", float? temperature = null)
+        {
+            using var content = new MultipartFormDataContent();
+            content.Add(new StringContent(url), "url");
+            content.Add(new StringContent(model), "model");
+
+            if (!string.IsNullOrEmpty(prompt))
+                content.Add(new StringContent(prompt), "prompt");
+
+            content.Add(new StringContent(responseFormat), "response_format");
+
+            if (temperature.HasValue)
+                content.Add(new StringContent(temperature.Value.ToString(CultureInfo.InvariantCulture)), "temperature");
+
+            var response = await _httpClient.PostAsync(BaseUrl + TranslationsEndpoint, content);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
         #endregion
 
         #region Text-to-Speech
@@ -297,11 +392,11 @@ namespace GroqApiLibrary
         /// <summary>
         /// Converts text to speech audio using Orpheus TTS models.
         /// </summary>
-        /// <param name="text">The text to convert to speech. Supports vocal directions in brackets like [cheerful], [sad], etc.</param>
-        /// <param name="voice">Voice to use. For English: tara, leah, jess, leo, dan, mia, zac, zoe. For Arabic: abdullah, amira.</param>
+        /// <param name="text">The text to convert to speech (max 200 characters). English supports vocal directions in brackets like [cheerful], [whisper], [dramatic].</param>
+        /// <param name="voice">Voice to use. English (orpheus-v1-english): autumn, diana, hannah, austin, daniel, troy. Arabic (orpheus-arabic-saudi): abdullah, fahad, sultan, lulwa, noura, aisha. See <see cref="OrpheusVoices"/>.</param>
         /// <param name="model">TTS model: canopylabs/orpheus-v1-english or canopylabs/orpheus-arabic-saudi</param>
-        /// <param name="responseFormat">Audio format: wav (default), mp3, opus, flac</param>
-        /// <returns>Audio bytes</returns>
+        /// <param name="responseFormat">Audio format. Orpheus only supports "wav"; other values are not accepted by the API.</param>
+        /// <returns>Audio bytes (WAV)</returns>
         public async Task<byte[]> CreateSpeechAsync(
             string text,
             string voice,
@@ -384,7 +479,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> CreateVisionCompletionWithImageUrlAsync(
             string imageUrl,
             string prompt,
-            string model = "meta-llama/llama-4-scout-17b-16e-instruct",
+            string model = "qwen/qwen3.6-27b",
             float? temperature = null)
         {
             ValidateImageUrl(imageUrl);
@@ -428,7 +523,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> CreateVisionCompletionWithBase64ImageAsync(
             string imagePath,
             string prompt,
-            string model = "meta-llama/llama-4-scout-17b-16e-instruct",
+            string model = "qwen/qwen3.6-27b",
             float? temperature = null)
         {
             var base64Image = await ConvertImageToBase64(imagePath);
@@ -475,7 +570,7 @@ namespace GroqApiLibrary
             string imageUrl,
             string prompt,
             List<Tool> tools,
-            string model = "meta-llama/llama-4-scout-17b-16e-instruct",
+            string model = "qwen/qwen3.6-27b",
             bool parallelToolCalls = true)
         {
             ValidateImageUrl(imageUrl);
@@ -526,7 +621,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> CreateVisionCompletionWithJsonModeAsync(
             string imageUrl,
             string prompt,
-            string model = "meta-llama/llama-4-scout-17b-16e-instruct")
+            string model = "qwen/qwen3.6-27b")
         {
             ValidateImageUrl(imageUrl);
 
@@ -571,7 +666,7 @@ namespace GroqApiLibrary
             JsonObject jsonSchema,
             string schemaName = "response",
             bool strict = false,
-            string model = "meta-llama/llama-4-scout-17b-16e-instruct")
+            string model = "qwen/qwen3.6-27b")
         {
             ValidateImageUrl(imageUrl);
 
@@ -804,69 +899,85 @@ namespace GroqApiLibrary
     }
 
     /// <summary>
-    /// Known model identifiers for convenience
+    /// Known model identifiers for convenience.
+    /// Verified against console.groq.com/docs/models and /deprecations as of 2026-07-12.
+    /// Members marked [Obsolete] are deprecated or already decommissioned on GroqCloud;
+    /// the message names the current replacement.
     /// </summary>
     public static class GroqModels
     {
-        // Production chat models
-        public const string Llama31_8B = "llama-3.1-8b-instant";
-        public const string Llama33_70B = "llama-3.3-70b-versatile";
-        
-        // GPT-OSS models (support structured outputs with strict mode)
-        public const string GptOss20B = "openai/gpt-oss-20b";
+        // ----- Recommended current models -----
+
+        // GPT-OSS: open-weight, reasoning + built-in tools, structured outputs with strict mode.
+        // GptOss120B is the recommended default chat model. NOTE: text-only (not vision-capable).
         public const string GptOss120B = "openai/gpt-oss-120b";
+        public const string GptOss20B = "openai/gpt-oss-20b";
         public const string GptOssSafeguard20B = "openai/gpt-oss-safeguard-20b";
-        
-        // Llama 4 multimodal models
-        public const string Llama4Scout = "meta-llama/llama-4-scout-17b-16e-instruct";
-        public const string Llama4Maverick = "meta-llama/llama-4-maverick-17b-128e-instruct";
-        
-        // Qwen (supports reasoning)
-        public const string Qwen3_32B = "qwen/qwen3-32b";
-        
-        // Other models
-        public const string KimiK2 = "moonshotai/kimi-k2-instruct-0905";
-        
-        // Compound systems
+
+        // Qwen 3.6 27B: current recommended reasoning + vision-capable model (131K context).
+        public const string Qwen36_27B = "qwen/qwen3.6-27b";
+
+        // Compound agentic systems (used via the chat endpoint by setting the model).
         public const string Compound = "groq/compound";
         public const string CompoundMini = "groq/compound-mini";
-        
-        // Guard models
+
+        // Guard / safety models.
         public const string LlamaGuard4 = "meta-llama/llama-guard-4-12b";
         public const string PromptGuard22M = "meta-llama/llama-prompt-guard-2-22m";
         public const string PromptGuard86M = "meta-llama/llama-prompt-guard-2-86m";
-        
-        // Audio models
+
+        // Audio (speech-to-text).
         public const string WhisperLargeV3 = "whisper-large-v3";
         public const string WhisperLargeV3Turbo = "whisper-large-v3-turbo";
-        
-        // TTS models
+
+        // Text-to-speech (Orpheus).
         public const string OrpheusEnglish = "canopylabs/orpheus-v1-english";
         public const string OrpheusArabic = "canopylabs/orpheus-arabic-saudi";
-        
-        // Legacy vision models (still supported)
+
+        // ----- Deprecated: still served for now, but scheduled for shutdown -----
+
+        [Obsolete("Deprecated on GroqCloud; shuts down 2026-08-16. Use GptOss20B.")]
+        public const string Llama31_8B = "llama-3.1-8b-instant";
+        [Obsolete("Deprecated on GroqCloud; shuts down 2026-08-16. Use GptOss120B or Qwen36_27B.")]
+        public const string Llama33_70B = "llama-3.3-70b-versatile";
+        [Obsolete("Deprecated on GroqCloud; shuts down 2026-07-17. Use Qwen36_27B (vision) or GptOss120B.")]
+        public const string Llama4Scout = "meta-llama/llama-4-scout-17b-16e-instruct";
+        [Obsolete("Deprecated on GroqCloud; shuts down 2026-07-17. Use GptOss120B.")]
+        public const string Qwen3_32B = "qwen/qwen3-32b";
+
+        // ----- Decommissioned: no longer served by GroqCloud (calls will fail) -----
+
+        [Obsolete("DECOMMISSIONED 2026-04-15 - no longer served. Use GptOss120B.")]
+        public const string KimiK2 = "moonshotai/kimi-k2-instruct-0905";
+        [Obsolete("DECOMMISSIONED 2026-03-09 - no longer served. Use GptOss120B.")]
+        public const string Llama4Maverick = "meta-llama/llama-4-maverick-17b-128e-instruct";
+        [Obsolete("DECOMMISSIONED - llama-3.2 vision no longer served. Use Qwen36_27B for vision.")]
         public const string Llama32_90BVision = "llama-3.2-90b-vision-preview";
+        [Obsolete("DECOMMISSIONED - llama-3.2 vision no longer served. Use Qwen36_27B for vision.")]
         public const string Llama32_11BVision = "llama-3.2-11b-vision-preview";
     }
 
     /// <summary>
-    /// Known TTS voices for Orpheus models
+    /// Known TTS voices for Orpheus models.
+    /// Verified against console.groq.com/docs/text-to-speech/orpheus as of 2026-07-12.
     /// </summary>
     public static class OrpheusVoices
     {
         // English voices (canopylabs/orpheus-v1-english)
-        public const string Tara = "tara";
-        public const string Leah = "leah";
-        public const string Jess = "jess";
-        public const string Leo = "leo";
-        public const string Dan = "dan";
-        public const string Mia = "mia";
-        public const string Zac = "zac";
-        public const string Zoe = "zoe";
-        
+        public const string Autumn = "autumn";
+        public const string Diana = "diana";
+        public const string Hannah = "hannah";
+        public const string Austin = "austin";
+        public const string Daniel = "daniel";
+        public const string Troy = "troy";
+
         // Arabic voices (canopylabs/orpheus-arabic-saudi)
         public const string Abdullah = "abdullah";
-        public const string Amira = "amira";
+        public const string Fahad = "fahad";
+        public const string Sultan = "sultan";
+        public const string Lulwa = "lulwa";
+        public const string Noura = "noura";
+        public const string Aisha = "aisha";
     }
 
     /// <summary>
