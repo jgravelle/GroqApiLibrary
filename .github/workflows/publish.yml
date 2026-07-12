@@ -1,0 +1,42 @@
+name: Publish to NuGet
+
+# Publishes the package to NuGet.org using Trusted Publishing (OIDC) — no stored API key.
+# Requires a matching Trusted Publishing policy on nuget.org:
+#   Owner: jgravelle | Repository: GroqApiLibrary | Workflow: publish.yml
+# Triggers on a published GitHub Release, or manually via the Actions tab.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # required for OIDC token exchange with NuGet
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Pack
+        run: dotnet pack GroqApiLibrary.csproj -c Release -o ${{ github.workspace }}/artifacts
+
+      - name: NuGet login (Trusted Publishing)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: JGravelle   # NuGet.org username
+
+      - name: Push
+        run: >
+          dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg"
+          --source https://api.nuget.org/v3/index.json
+          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
+          --skip-duplicate
