@@ -352,8 +352,9 @@ namespace GroqApiLibrary
         }
 
         /// <summary>
-        /// Returns the <c>executed_tools</c> array from a Compound response (the built-in tools the
-        /// system ran while producing the answer), or null if none is present.
+        /// Returns the raw <c>executed_tools</c> array — the built-in tools the model ran while producing
+        /// the answer — or null if none is present. Works for both Compound systems and gpt-oss built-in
+        /// tools (they share this location). For a typed projection, use <see cref="GroqExecutedTool.FromResponse"/>.
         /// </summary>
         public static JsonArray? GetExecutedTools(JsonObject? response)
             => response?["choices"]?[0]?["message"]?["executed_tools"] as JsonArray;
