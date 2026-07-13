@@ -522,6 +522,35 @@ var response = await groqApi.CreateCompoundCompletionAsync(
 var executed = GroqApiClient.GetExecutedTools(response); // which built-in tools the system ran
 ```
 
+## 🧰 Built-in server-side tools (v2.3)
+
+Typed builders and identifiers so you can attach Groq's built-in, server-executed tools without hand-writing JSON.
+
+**gpt-oss models** take built-in tools in the `tools` array:
+
+```csharp
+var response = await groqApi.CreateChatCompletionWithBuiltInToolsAsync(
+    messages,
+    GroqModels.GptOss120B,
+    new[] { GroqBuiltInTools.BrowserSearch() },          // and/or GroqBuiltInTools.CodeInterpreter()
+    new GroqChatOptions { ToolChoice = "required" });    // optional
+```
+
+**Compound systems** enable tools by name — pass the typed constants instead of magic strings:
+
+```csharp
+var response = await groqApi.CreateCompoundCompletionAsync(
+    messages,
+    enabledTools: new[] { GroqBuiltInTools.Compound.WebSearch, GroqBuiltInTools.Compound.VisitWebsite });
+```
+
+Read what actually ran — typed, works for both compound and gpt-oss:
+
+```csharp
+foreach (var tool in GroqExecutedTool.FromResponse(response))
+    Console.WriteLine($"{tool.Type ?? tool.Name}: {tool.Output}");   // .Raw for tool-specific fields
+```
+
 ## 🌱 Optional Prompt Compression (v2.1)
 
 A "greening"/cost feature: reduce a prompt's token footprint before sending. This is **opt-in lossy
@@ -687,6 +716,7 @@ v2.0 is backwards compatible. Existing code will continue to work. New features 
 - Added `GroqModels`, `OrpheusVoices`, `ServiceTiers`, `ReasoningEffort`, `ReasoningFormat` static classes for convenience
 
 ### v2.3 (unreleased)
+- **Built-in server-side tools helpers** — `GroqBuiltInTools` builders (`BrowserSearch()`, `CodeInterpreter()`) and identifier constants (`GroqBuiltInTools.Compound.*`) for adding Groq's server-side tools without raw JSON, a `CreateChatCompletionWithBuiltInToolsAsync` convenience extension, and a typed `GroqExecutedTool.FromResponse` for inspecting `executed_tools` on both Compound and gpt-oss runs.
 - **Typed API errors** — non-2xx responses now throw `GroqApiException` (and status-specific subtypes: `GroqRateLimitException`, `GroqAuthenticationException`, `GroqPermissionException`, `GroqBadRequestException`, `GroqNotFoundException`, `GroqServerException`) exposing `StatusCode`, parsed `ErrorCode`/`ErrorType`, and `ResponseBody`. All derive from `HttpRequestException`, so existing catch blocks are unaffected. Streaming errors now include the response body too.
 
 ### v2.2 (2026-07)
