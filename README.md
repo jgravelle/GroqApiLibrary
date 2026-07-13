@@ -551,6 +551,25 @@ foreach (var tool in GroqExecutedTool.FromResponse(response))
     Console.WriteLine($"{tool.Type ?? tool.Name}: {tool.Output}");   // .Raw for tool-specific fields
 ```
 
+## 🧪 Responses API (beta, v2.3)
+
+OpenAI-compatible Responses API (`POST /openai/v1/responses`). **Beta** surface — may change with the upstream API.
+
+```csharp
+// Plain string input
+var resp = await groqApi.CreateResponseAsync(
+    GroqModels.GptOss120B,
+    "Explain quicksort in one sentence.",
+    new GroqResponseOptions { ReasoningEffort = "low", MaxOutputTokens = 200 });
+
+string? answer = GroqApiClient.GetResponseOutputText(resp);   // top-level output_text (falls back to output[])
+GroqUsage usage = GroqUsage.FromResponse(resp)!;              // maps input_tokens/output_tokens too
+```
+
+You can also pass a message array as `input`, and set `Instructions`, `Tools`, `ToolChoice`, `Text` (JSON-schema output), `Temperature`, `Top_p`, and `Metadata` via `GroqResponseOptions`.
+
+> **Stateful conversations are not supported on Groq** (`previous_response_id`/`store` are unavailable) — keep the history yourself and pass it in `input` on every call.
+
 ## 🌱 Optional Prompt Compression (v2.1)
 
 A "greening"/cost feature: reduce a prompt's token footprint before sending. This is **opt-in lossy
@@ -716,6 +735,7 @@ v2.0 is backwards compatible. Existing code will continue to work. New features 
 - Added `GroqModels`, `OrpheusVoices`, `ServiceTiers`, `ReasoningEffort`, `ReasoningFormat` static classes for convenience
 
 ### v2.3 (unreleased)
+- **Responses API (beta)** — `CreateResponseAsync(model, input, GroqResponseOptions?)` for the OpenAI-compatible `POST /openai/v1/responses`, with `GetResponseOutputText` to read the answer and typed `GroqResponseOptions`. `GroqUsage.FromResponse` now also maps the Responses `input_tokens`/`output_tokens` shape. Stateful conversations aren't supported on Groq — pass full history each call.
 - **Built-in server-side tools helpers** — `GroqBuiltInTools` builders (`BrowserSearch()`, `CodeInterpreter()`) and identifier constants (`GroqBuiltInTools.Compound.*`) for adding Groq's server-side tools without raw JSON, a `CreateChatCompletionWithBuiltInToolsAsync` convenience extension, and a typed `GroqExecutedTool.FromResponse` for inspecting `executed_tools` on both Compound and gpt-oss runs.
 - **Typed API errors** — non-2xx responses now throw `GroqApiException` (and status-specific subtypes: `GroqRateLimitException`, `GroqAuthenticationException`, `GroqPermissionException`, `GroqBadRequestException`, `GroqNotFoundException`, `GroqServerException`) exposing `StatusCode`, parsed `ErrorCode`/`ErrorType`, and `ResponseBody`. All derive from `HttpRequestException`, so existing catch blocks are unaffected. Streaming errors now include the response body too.
 

@@ -21,6 +21,7 @@ namespace GroqApiLibrary
         private const string SpeechEndpoint = "/audio/speech";
         private const string FilesEndpoint = "/files";
         private const string BatchesEndpoint = "/batches";
+        private const string ResponsesEndpoint = "/responses";
 
         // Vision-capable models. Verified against console.groq.com/docs/models &amp; /deprecations (2026-07-12).
         // qwen/qwen3.6-27b is the current recommended vision model. The Llama 4 / Llama 3.2 vision
@@ -358,6 +359,73 @@ namespace GroqApiLibrary
         /// </summary>
         public static JsonArray? GetExecutedTools(JsonObject? response)
             => response?["choices"]?[0]?["message"]?["executed_tools"] as JsonArray;
+
+        #endregion
+
+        #region Responses API (beta)
+
+        /// <summary>
+        /// <b>Beta.</b> Creates a response via the OpenAI-compatible Responses API
+        /// (<c>POST /openai/v1/responses</c>) and returns the raw response object.
+        /// <para>
+        /// Read the answer with <see cref="GetResponseOutputText"/> and usage with
+        /// <see cref="GroqUsage.FromResponse"/>. Groq does <b>not</b> support stateful conversations
+        /// (<c>previous_response_id</c>/<c>store</c>): keep the history yourself and pass it in
+        /// <paramref name="input"/> each call.
+        /// </para>
+        /// This surface is beta and may change with the upstream API.
+        /// Verified against console.groq.com/docs/responses-api (2026-07-13).
+        /// </summary>
+        /// <param name="model">Model id (e.g. <c>openai/gpt-oss-120b</c>, <c>llama-3.3-70b-versatile</c>).</param>
+        /// <param name="input">A plain text string, or a message array (role/content objects).</param>
+        /// <param name="options">Optional request parameters (see <see cref="GroqResponseOptions"/>).</param>
+        public async Task<JsonObject?> CreateResponseAsync(string model, JsonNode input, GroqResponseOptions? options = null)
+        {
+            if (string.IsNullOrEmpty(model)) throw new ArgumentException("A model is required.", nameof(model));
+            if (input is null) throw new ArgumentNullException(nameof(input));
+
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                ["input"] = input.DeepClone()
+            };
+            options?.ApplyTo(request);
+
+            var response = await _httpClient.PostAsJsonAsync(BaseUrl + ResponsesEndpoint, request);
+            await EnsureGroqSuccessAsync(response, "Responses API request");
+            return await response.Content.ReadFromJsonAsync<JsonObject>();
+        }
+
+        /// <summary>
+        /// <b>Beta.</b> Extracts the assistant text from a Responses API result: the top-level
+        /// <c>output_text</c> when present, otherwise the concatenation of <c>output[].content[].text</c>
+        /// entries of type <c>output_text</c>. Returns null when no text is found.
+        /// </summary>
+        public static string? GetResponseOutputText(JsonObject? response)
+        {
+            if (response is null) return null;
+
+            if (response["output_text"] is JsonValue direct && direct.TryGetValue<string>(out var text))
+                return text;
+
+            if (response["output"] is not JsonArray output) return null;
+
+            var builder = new StringBuilder();
+            foreach (var item in output)
+            {
+                if (item is not JsonObject message || message["content"] is not JsonArray content) continue;
+                foreach (var part in content)
+                {
+                    if (part is JsonObject partObj
+                        && partObj["type"]?.GetValue<string>() == "output_text"
+                        && partObj["text"] is JsonValue t
+                        && t.TryGetValue<string>(out var s))
+                        builder.Append(s);
+                }
+            }
+
+            return builder.Length > 0 ? builder.ToString() : null;
+        }
 
         #endregion
 
