@@ -756,7 +756,7 @@ v2.0 is backwards compatible. Existing code will continue to work. New features 
 - `max_tokens` deprecated in favor of `max_completion_tokens`
 - Added `GroqModels`, `OrpheusVoices`, `ServiceTiers`, `ReasoningEffort`, `ReasoningFormat` static classes for convenience
 
-### Unreleased
+### v2.4.0 (2026-07)
 - **Remote MCP tools (beta)** — `GroqBuiltInTools.Mcp(...)` builds a remote MCP server tool entry (`type: "mcp"`, with `server_label`/`server_url`/`headers`/`server_description`/`require_approval`/`allowed_tools`) usable in both Chat Completions and the Responses API, plus `GroqBuiltInTools.Approval` constants. `server_url` must be reachable from Groq's cloud over public HTTPS.
 
 ### v2.3.0 (2026-07)
