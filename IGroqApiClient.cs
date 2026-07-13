@@ -76,6 +76,18 @@ namespace GroqApiLibrary
 
         #endregion
 
+        #region Responses API (beta)
+
+        /// <summary>
+        /// <b>Beta.</b> Creates a response via the OpenAI-compatible Responses API and returns the raw
+        /// response. Read the text with <see cref="GroqApiClient.GetResponseOutputText"/> and usage with
+        /// <see cref="GroqUsage.FromResponse"/>. Groq does not support stateful conversations, so pass the
+        /// full history in <paramref name="input"/> each call. Beta surface — may change with the API.
+        /// </summary>
+        Task<JsonObject?> CreateResponseAsync(string model, JsonNode input, GroqResponseOptions? options = null);
+
+        #endregion
+
         #region Audio
 
         /// <summary>

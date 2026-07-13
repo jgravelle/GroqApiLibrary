@@ -53,8 +53,10 @@ namespace GroqApiLibrary
 
             var result = new GroqUsage
             {
-                PromptTokens = GetInt(usage, "prompt_tokens"),
-                CompletionTokens = GetInt(usage, "completion_tokens"),
+                // Chat completions use prompt_tokens/completion_tokens; the Responses API uses
+                // input_tokens/output_tokens. Fall back so this parser works for both.
+                PromptTokens = usage.ContainsKey("prompt_tokens") ? GetInt(usage, "prompt_tokens") : GetInt(usage, "input_tokens"),
+                CompletionTokens = usage.ContainsKey("completion_tokens") ? GetInt(usage, "completion_tokens") : GetInt(usage, "output_tokens"),
                 TotalTokens = GetInt(usage, "total_tokens"),
                 QueueTime = GetDouble(usage, "queue_time"),
                 PromptTime = GetDouble(usage, "prompt_time"),
@@ -65,6 +67,8 @@ namespace GroqApiLibrary
 
             if (usage["prompt_tokens_details"] is JsonObject details)
                 result.CachedTokens = GetInt(details, "cached_tokens");
+            else if (usage["input_tokens_details"] is JsonObject responsesDetails)
+                result.CachedTokens = GetInt(responsesDetails, "cached_tokens");
 
             return result;
         }
