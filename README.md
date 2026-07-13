@@ -640,20 +640,43 @@ var request = new JsonObject
 
 ## 🛡️ Error Handling
 
+Non-2xx responses throw a `GroqApiException` carrying the parsed error envelope (`ErrorCode`, `ErrorType`, `ResponseBody`) and the HTTP `StatusCode`. It **derives from `HttpRequestException`**, so existing `catch (HttpRequestException)` code keeps working unchanged — you only opt into the richer types where you want them:
+
 ```csharp
 try
 {
     var result = await groqApi.CreateChatCompletionAsync(request);
 }
-catch (HttpRequestException e)
+catch (GroqRateLimitException e)          // HTTP 429
+{
+    Console.WriteLine($"Rate limited; retry after {e.RetryAfter}");
+}
+catch (GroqAuthenticationException e)     // HTTP 401
+{
+    Console.WriteLine($"Bad API key: {e.ErrorCode}");
+}
+catch (GroqApiException e)                // any other non-2xx (400/403/404/5xx…)
+{
+    Console.WriteLine($"Groq error {e.StatusCode} ({e.ErrorType}/{e.ErrorCode}): {e.Message}");
+}
+catch (HttpRequestException e)            // still catches everything above, for legacy code
 {
     Console.WriteLine($"API request failed: {e.Message}");
 }
-catch (JsonException e)
-{
-    Console.WriteLine($"Failed to parse response: {e.Message}");
-}
 ```
+
+Typed subtypes: `GroqBadRequestException` (400), `GroqAuthenticationException` (401), `GroqPermissionException` (403 — e.g. an endpoint not on your plan), `GroqNotFoundException` (404), `GroqRateLimitException` (429, with `RetryAfter`), `GroqServerException` (5xx).
+
+### Retries & timeouts
+
+Resilience is layered on the `HttpClient` rather than baked into the client. With the DI registration you can add the standard resilience handler (retries 408/429/5xx + timeout + circuit breaker):
+
+```csharp
+builder.Services.AddGroqApiClient(cfg["Groq:ApiKey"]!)
+    .AddStandardResilienceHandler();   // requires the Microsoft.Extensions.Http.Resilience package
+```
+
+> Note: retrying is safe for idempotent failures (429/5xx/timeouts). Streaming calls can only be retried before the first chunk is consumed — a partially-read SSE stream can't be replayed.
 
 ## 🔄 Migration from v1.x
 
@@ -662,6 +685,9 @@ v2.0 is backwards compatible. Existing code will continue to work. New features 
 **Notable changes:**
 - `max_tokens` deprecated in favor of `max_completion_tokens`
 - Added `GroqModels`, `OrpheusVoices`, `ServiceTiers`, `ReasoningEffort`, `ReasoningFormat` static classes for convenience
+
+### v2.3 (unreleased)
+- **Typed API errors** — non-2xx responses now throw `GroqApiException` (and status-specific subtypes: `GroqRateLimitException`, `GroqAuthenticationException`, `GroqPermissionException`, `GroqBadRequestException`, `GroqNotFoundException`, `GroqServerException`) exposing `StatusCode`, parsed `ErrorCode`/`ErrorType`, and `ResponseBody`. All derive from `HttpRequestException`, so existing catch blocks are unaffected. Streaming errors now include the response body too.
 
 ### v2.2 (2026-07)
 - **Files API** — `UploadFileAsync`, `ListFilesAsync`, `GetFileAsync`, `GetFileContentAsync`/`GetFileContentStreamAsync`, `DeleteFileAsync`.
