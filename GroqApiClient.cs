@@ -80,11 +80,7 @@ namespace GroqApiLibrary
             GuardStructuredOutputCompatibility(request, streaming: false);
             var response = await _httpClient.PostAsJsonAsync(BaseUrl + ChatCompletionsEndpoint, request);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"API request failed with status code {response.StatusCode}. Response content: {errorContent}");
-            }
+            await EnsureGroqSuccessAsync(response, "API request");
 
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
@@ -114,7 +110,7 @@ namespace GroqApiLibrary
             var content = new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json");
             using var requestMessage = new HttpRequestMessage(HttpMethod.Post, BaseUrl + ChatCompletionsEndpoint) { Content = content };
             using var response = await _httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Streaming API request");
             using var stream = await response.Content.ReadAsStreamAsync();
             using var reader = new StreamReader(stream);
             string? line;
@@ -174,6 +170,26 @@ namespace GroqApiLibrary
                     "Groq does not support Structured Outputs (response_format \"json_schema\") together with tool use. " +
                     "Remove the tools, or switch to JSON object mode (response_format type \"json_object\").",
                     nameof(request));
+        }
+
+        /// <summary>
+        /// Throws a typed <see cref="GroqApiException"/> for a non-2xx response, parsing Groq's error
+        /// envelope and the <c>Retry-After</c> header. Replaces ad-hoc <see cref="HttpRequestException"/>
+        /// throws and <c>EnsureSuccessStatusCode()</c> calls so every endpoint reports errors uniformly.
+        /// Because the thrown types derive from <see cref="HttpRequestException"/>, existing catch blocks
+        /// keep working.
+        /// </summary>
+        private static async Task EnsureGroqSuccessAsync(HttpResponseMessage response, string operation)
+        {
+            if (response.IsSuccessStatusCode)
+                return;
+
+            string? body = null;
+            try { body = await response.Content.ReadAsStringAsync(); }
+            catch { /* best-effort: some error responses carry no readable body */ }
+
+            var retryAfter = response.Headers.RetryAfter?.Delta;
+            throw GroqApiException.Create(response.StatusCode, body, operation, retryAfter);
         }
 
         /// <summary>
@@ -365,7 +381,7 @@ namespace GroqApiLibrary
                 content.Add(new StringContent(temperature.Value.ToString(CultureInfo.InvariantCulture)), "temperature");
 
             var response = await _httpClient.PostAsync(BaseUrl + TranscriptionsEndpoint, content);
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Groq API request");
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
@@ -385,7 +401,7 @@ namespace GroqApiLibrary
                 content.Add(new StringContent(temperature.Value.ToString(CultureInfo.InvariantCulture)), "temperature");
 
             var response = await _httpClient.PostAsync(BaseUrl + TranslationsEndpoint, content);
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Groq API request");
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
@@ -412,7 +428,7 @@ namespace GroqApiLibrary
                 content.Add(new StringContent(temperature.Value.ToString(CultureInfo.InvariantCulture)), "temperature");
 
             var response = await _httpClient.PostAsync(BaseUrl + TranscriptionsEndpoint, content);
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Groq API request");
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
@@ -436,7 +452,7 @@ namespace GroqApiLibrary
                 content.Add(new StringContent(temperature.Value.ToString(CultureInfo.InvariantCulture)), "temperature");
 
             var response = await _httpClient.PostAsync(BaseUrl + TranslationsEndpoint, content);
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Groq API request");
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
@@ -469,11 +485,7 @@ namespace GroqApiLibrary
             var content = new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(BaseUrl + SpeechEndpoint, content);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"TTS request failed with status code {response.StatusCode}. Response content: {errorContent}");
-            }
+            await EnsureGroqSuccessAsync(response, "TTS request");
 
             return await response.Content.ReadAsByteArrayAsync();
         }
@@ -512,11 +524,7 @@ namespace GroqApiLibrary
             var content = new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(BaseUrl + SpeechEndpoint, content);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"TTS request failed with status code {response.StatusCode}. Response content: {errorContent}");
-            }
+            await EnsureGroqSuccessAsync(response, "TTS request");
 
             return await response.Content.ReadAsStreamAsync();
         }
@@ -773,7 +781,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> ListModelsAsync()
         {
             HttpResponseMessage response = await _httpClient.GetAsync($"{BaseUrl}/models");
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Groq API request");
 
             string responseString = await response.Content.ReadAsStringAsync();
             JsonObject? responseJson = JsonSerializer.Deserialize<JsonObject>(responseString);
@@ -803,11 +811,7 @@ namespace GroqApiLibrary
             content.Add(new StringContent(purpose), "purpose");
 
             var response = await _httpClient.PostAsync(BaseUrl + FilesEndpoint, content);
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"File upload failed with status code {response.StatusCode}. Response content: {errorContent}");
-            }
+            await EnsureGroqSuccessAsync(response, "File upload");
 
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
@@ -818,7 +822,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> ListFilesAsync()
         {
             var response = await _httpClient.GetAsync(BaseUrl + FilesEndpoint);
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Groq API request");
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
@@ -828,7 +832,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> GetFileAsync(string fileId)
         {
             var response = await _httpClient.GetAsync($"{BaseUrl}{FilesEndpoint}/{fileId}");
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Groq API request");
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
@@ -838,11 +842,7 @@ namespace GroqApiLibrary
         public async Task<byte[]> GetFileContentAsync(string fileId)
         {
             var response = await _httpClient.GetAsync($"{BaseUrl}{FilesEndpoint}/{fileId}/content");
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"File content download failed with status code {response.StatusCode}. Response content: {errorContent}");
-            }
+            await EnsureGroqSuccessAsync(response, "File content download");
 
             return await response.Content.ReadAsByteArrayAsync();
         }
@@ -853,7 +853,7 @@ namespace GroqApiLibrary
         public async Task<Stream> GetFileContentStreamAsync(string fileId)
         {
             var response = await _httpClient.GetAsync($"{BaseUrl}{FilesEndpoint}/{fileId}/content", HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Groq API request");
             return await response.Content.ReadAsStreamAsync();
         }
 
@@ -863,7 +863,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> DeleteFileAsync(string fileId)
         {
             var response = await _httpClient.DeleteAsync($"{BaseUrl}{FilesEndpoint}/{fileId}");
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Groq API request");
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
@@ -895,11 +895,7 @@ namespace GroqApiLibrary
                 request["metadata"] = JsonNode.Parse(metadata.ToJsonString());
 
             var response = await _httpClient.PostAsJsonAsync(BaseUrl + BatchesEndpoint, request);
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"Batch creation failed with status code {response.StatusCode}. Response content: {errorContent}");
-            }
+            await EnsureGroqSuccessAsync(response, "Batch creation");
 
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
@@ -910,7 +906,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> GetBatchAsync(string batchId)
         {
             var response = await _httpClient.GetAsync($"{BaseUrl}{BatchesEndpoint}/{batchId}");
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Groq API request");
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
@@ -920,7 +916,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> ListBatchesAsync()
         {
             var response = await _httpClient.GetAsync(BaseUrl + BatchesEndpoint);
-            response.EnsureSuccessStatusCode();
+            await EnsureGroqSuccessAsync(response, "Groq API request");
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
 
@@ -930,11 +926,7 @@ namespace GroqApiLibrary
         public async Task<JsonObject?> CancelBatchAsync(string batchId)
         {
             var response = await _httpClient.PostAsync($"{BaseUrl}{BatchesEndpoint}/{batchId}/cancel", null);
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"Batch cancel failed with status code {response.StatusCode}. Response content: {errorContent}");
-            }
+            await EnsureGroqSuccessAsync(response, "Batch cancel");
 
             return await response.Content.ReadFromJsonAsync<JsonObject>();
         }
