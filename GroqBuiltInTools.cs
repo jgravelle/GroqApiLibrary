@@ -48,11 +48,73 @@ namespace GroqApiLibrary
             return array;
         }
 
-        /// <summary>The <c>type</c> values for gpt-oss built-in tool entries.</summary>
+        /// <summary>
+        /// <b>Beta.</b> A remote MCP server tool entry (<c>{ "type": "mcp", ... }</c>) for the <c>tools</c>
+        /// array. Groq's backend connects to <paramref name="serverUrl"/> and invokes its tools
+        /// server-side, so the URL must be reachable from the public internet over HTTPS (a localhost or
+        /// LAN server will not work). Works on both Chat Completions and the Responses API.
+        /// <para>
+        /// Pass credentials the target server needs via <paramref name="headers"/> (e.g.
+        /// <c>{ ["Authorization"] = "Bearer &lt;token&gt;" }</c>) — note these are forwarded to Groq, which
+        /// relays them to the server. Use <paramref name="allowedTools"/> to restrict which of the server's
+        /// tools the model may call, and <paramref name="requireApproval"/> (<see cref="Approval"/>) to gate
+        /// execution.
+        /// </para>
+        /// Remote MCP is beta on Groq; this surface may change. Verified against console.groq.com/docs
+        /// (MCP tool) on 2026-07-13.
+        /// </summary>
+        public static JsonObject Mcp(
+            string serverLabel,
+            string serverUrl,
+            IDictionary<string, string>? headers = null,
+            string? serverDescription = null,
+            string? requireApproval = null,
+            IEnumerable<string>? allowedTools = null)
+        {
+            if (string.IsNullOrEmpty(serverLabel)) throw new ArgumentException("A server label is required.", nameof(serverLabel));
+            if (string.IsNullOrEmpty(serverUrl)) throw new ArgumentException("A server URL is required.", nameof(serverUrl));
+
+            var tool = new JsonObject
+            {
+                ["type"] = Types.Mcp,
+                ["server_label"] = serverLabel,
+                ["server_url"] = serverUrl,
+            };
+
+            if (headers is { Count: > 0 })
+            {
+                var headerObject = new JsonObject();
+                foreach (var header in headers)
+                    headerObject[header.Key] = header.Value;
+                tool["headers"] = headerObject;
+            }
+
+            if (!string.IsNullOrEmpty(serverDescription)) tool["server_description"] = serverDescription;
+            if (!string.IsNullOrEmpty(requireApproval)) tool["require_approval"] = requireApproval;
+
+            if (allowedTools is not null)
+            {
+                var allowed = new JsonArray();
+                foreach (var name in allowedTools) allowed.Add(name);
+                tool["allowed_tools"] = allowed;
+            }
+
+            return tool;
+        }
+
+        /// <summary>The <c>type</c> values for built-in tool entries.</summary>
         public static class Types
         {
             public const string BrowserSearch = "browser_search";
             public const string CodeInterpreter = "code_interpreter";
+            public const string Mcp = "mcp";
+        }
+
+        /// <summary><c>require_approval</c> values for a remote MCP tool.</summary>
+        public static class Approval
+        {
+            public const string Never = "never";
+            public const string Always = "always";
         }
 
         /// <summary>

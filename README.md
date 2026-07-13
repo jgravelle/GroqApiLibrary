@@ -570,6 +570,28 @@ You can also pass a message array as `input`, and set `Instructions`, `Tools`, `
 
 > **Stateful conversations are not supported on Groq** (`previous_response_id`/`store` are unavailable) — keep the history yourself and pass it in `input` on every call.
 
+## 🔌 Remote MCP tools (beta)
+
+Attach a hosted (remote) MCP server so the model can call its tools **server-side**. Works on both Chat Completions and the Responses API. `GroqBuiltInTools.Mcp(...)` builds the tool entry:
+
+```csharp
+var github = GroqBuiltInTools.Mcp(
+    serverLabel: "github",
+    serverUrl: "https://api.githubcopilot.com/mcp/",
+    headers: new Dictionary<string, string> { ["Authorization"] = $"Bearer {pat}" },
+    requireApproval: GroqBuiltInTools.Approval.Never,
+    allowedTools: new[] { "list_issues", "search_issues" });   // optional allow-list
+
+// Chat Completions:
+var resp = await groqApi.CreateChatCompletionWithBuiltInToolsAsync(messages, GroqModels.GptOss120B, new[] { github });
+
+// Responses API:
+var resp2 = await groqApi.CreateResponseAsync(GroqModels.GptOss120B, input,
+    new GroqResponseOptions { Tools = new JsonArray { github } });
+```
+
+> ⚠️ **Beta**, and two things to know: (1) `server_url` must be reachable **from Groq's cloud** over public HTTPS — a localhost/LAN MCP server won't work. (2) Any `headers` you pass (e.g. an auth token) are sent to Groq, which relays them to the MCP server — scope those credentials tightly.
+
 ## 🌱 Optional Prompt Compression (v2.1)
 
 A "greening"/cost feature: reduce a prompt's token footprint before sending. This is **opt-in lossy
@@ -733,6 +755,9 @@ v2.0 is backwards compatible. Existing code will continue to work. New features 
 **Notable changes:**
 - `max_tokens` deprecated in favor of `max_completion_tokens`
 - Added `GroqModels`, `OrpheusVoices`, `ServiceTiers`, `ReasoningEffort`, `ReasoningFormat` static classes for convenience
+
+### Unreleased
+- **Remote MCP tools (beta)** — `GroqBuiltInTools.Mcp(...)` builds a remote MCP server tool entry (`type: "mcp"`, with `server_label`/`server_url`/`headers`/`server_description`/`require_approval`/`allowed_tools`) usable in both Chat Completions and the Responses API, plus `GroqBuiltInTools.Approval` constants. `server_url` must be reachable from Groq's cloud over public HTTPS.
 
 ### v2.3.0 (2026-07)
 - **Responses API (beta)** — `CreateResponseAsync(model, input, GroqResponseOptions?)` for the OpenAI-compatible `POST /openai/v1/responses`, with `GetResponseOutputText` to read the answer and typed `GroqResponseOptions`. `GroqUsage.FromResponse` now also maps the Responses `input_tokens`/`output_tokens` shape. Stateful conversations aren't supported on Groq — pass full history each call.
