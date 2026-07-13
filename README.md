@@ -734,7 +734,7 @@ v2.0 is backwards compatible. Existing code will continue to work. New features 
 - `max_tokens` deprecated in favor of `max_completion_tokens`
 - Added `GroqModels`, `OrpheusVoices`, `ServiceTiers`, `ReasoningEffort`, `ReasoningFormat` static classes for convenience
 
-### v2.3 (unreleased)
+### v2.3.0 (2026-07)
 - **Responses API (beta)** — `CreateResponseAsync(model, input, GroqResponseOptions?)` for the OpenAI-compatible `POST /openai/v1/responses`, with `GetResponseOutputText` to read the answer and typed `GroqResponseOptions`. `GroqUsage.FromResponse` now also maps the Responses `input_tokens`/`output_tokens` shape. Stateful conversations aren't supported on Groq — pass full history each call.
 - **Built-in server-side tools helpers** — `GroqBuiltInTools` builders (`BrowserSearch()`, `CodeInterpreter()`) and identifier constants (`GroqBuiltInTools.Compound.*`) for adding Groq's server-side tools without raw JSON, a `CreateChatCompletionWithBuiltInToolsAsync` convenience extension, and a typed `GroqExecutedTool.FromResponse` for inspecting `executed_tools` on both Compound and gpt-oss runs.
 - **Typed API errors** — non-2xx responses now throw `GroqApiException` (and status-specific subtypes: `GroqRateLimitException`, `GroqAuthenticationException`, `GroqPermissionException`, `GroqBadRequestException`, `GroqNotFoundException`, `GroqServerException`) exposing `StatusCode`, parsed `ErrorCode`/`ErrorType`, and `ResponseBody`. All derive from `HttpRequestException`, so existing catch blocks are unaffected. Streaming errors now include the response body too.
