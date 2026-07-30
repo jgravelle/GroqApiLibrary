@@ -1,6 +1,6 @@
 # Groq API C# Client Library
 
-Welcome to the Groq API C# Client Library! This powerful and flexible library provides a comprehensive interface to interact with the Groq AI API. Designed for .NET 8 and above, our library offers a full range of features to enhance your AI-powered applications.
+Welcome to the Groq API C# Client Library! This powerful and flexible library provides a comprehensive interface to interact with the Groq AI API. Multi-targets **.NET 8** and **.NET 10**, and offers a full range of features to enhance your AI-powered applications.
 
 ## 🌟 Features
 
@@ -22,6 +22,17 @@ Welcome to the Groq API C# Client Library! This powerful and flexible library pr
 ```bash
 dotnet add package GroqApiLibrary
 ```
+
+### Target Frameworks
+
+The package multi-targets `net8.0` and `net10.0`; NuGet resolves the right one automatically.
+
+| Your project | You get | `Microsoft.Extensions.Http` |
+|---|---|---|
+| .NET 8 / .NET 9 | `lib/net8.0` | 8.0.1 |
+| .NET 10+ | `lib/net10.0` | 10.0.10 |
+
+> **Heads-up:** .NET 8 reaches end of support on **2026-11-10**. The `net8.0` target will be dropped in 3.0 — plan to be on .NET 10 (LTS, supported through Nov 2028) by then.
 
 ### Manual Installation
 1. Clone this repository or download the source files
@@ -756,6 +767,11 @@ v2.0 is backwards compatible. Existing code will continue to work. New features 
 - `max_tokens` deprecated in favor of `max_completion_tokens`
 - Added `GroqModels`, `OrpheusVoices`, `ServiceTiers`, `ReasoningEffort`, `ReasoningFormat` static classes for convenience
 
+### v2.5.0 (2026-07)
+- **.NET 10 support** — the package now multi-targets `net8.0` and `net10.0`. .NET 10 consumers get the newer BCL and `Microsoft.Extensions.Http` 10.0.10; `net8.0` consumers are unaffected (still 8.0.1). No breaking changes — upgrade in place. The `net8.0` target will be dropped in 3.0, after .NET 8 goes end-of-support on 2026-11-10.
+- **Removed the unused `Microsoft.AspNetCore.Components` dependency**, which was pulling ASP.NET Core into what is otherwise a plain HTTP client library.
+- Note: 2.3.0 and 2.4.0 were tagged in the repo but never published to NuGet. This release ships that work cumulatively — those version numbers are skipped on nuget.org.
+
 ### v2.4.0 (2026-07)
 - **Remote MCP tools (beta)** — `GroqBuiltInTools.Mcp(...)` builds a remote MCP server tool entry (`type: "mcp"`, with `server_label`/`server_url`/`headers`/`server_description`/`require_approval`/`allowed_tools`) usable in both Chat Completions and the Responses API, plus `GroqBuiltInTools.Approval` constants. `server_url` must be reachable from Groq's cloud over public HTTPS.
 
@@ -808,6 +824,16 @@ the Actions tab (`workflow_dispatch`).
 
 **Does not** trigger a publish: a plain `git push`, pushing a tag on its own, or a *draft* release —
 only a **published** Release (or a manual run) does.
+
+### Building locally
+
+The project multi-targets, so `dotnet build` produces both `bin/Release/net8.0/` and
+`bin/Release/net10.0/`. Building requires the **.NET 10 SDK** (it builds both legs); running the
+`net8.0` output additionally needs the .NET 8 runtime.
+
+> `GeneratePackageOnBuild` is deliberately **not** set — it is incompatible with multi-targeting
+> (it fires during the first inner build and fails with `NU5026` before the second target framework
+> is built). Run `dotnet pack` explicitly when you want a `.nupkg`.
 
 ## 📄 License
 
